@@ -1,5 +1,5 @@
 import { Plugin } from 'obsidian';
-import { fixPreviousSpelling } from './fix-previous-spelling';
+import { fixPreviousSpelling, cycleSuggestion } from './fix-previous-spelling';
 
 export function registerCommands(plugin: Plugin): void {
 	plugin.addCommand({
@@ -12,5 +12,17 @@ export function registerCommands(plugin: Plugin): void {
 			}
 		],
 		callback: () => fixPreviousSpelling(plugin)
+	});
+	
+	plugin.addCommand({
+		id: 'cycle-suggestion',
+		name: 'Cycle suggestion',
+		hotkeys: [
+			{
+				modifiers: ['Alt'],
+				key: 'c'
+			}
+		],
+		callback: () => cycleSuggestion(plugin)
 	});
 }
