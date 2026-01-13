@@ -1,5 +1,5 @@
 import { Plugin } from 'obsidian';
-import { fixPreviousSpelling, cycleSuggestion } from './fix-previous-spelling';
+import { fixPreviousSpelling, cycleSuggestion, restoreOriginalWord } from './fix-previous-spelling';
 
 export function registerCommands(plugin: Plugin): void {
 	plugin.addCommand({
@@ -24,5 +24,17 @@ export function registerCommands(plugin: Plugin): void {
 			}
 		],
 		callback: () => cycleSuggestion(plugin)
+	});
+	
+	plugin.addCommand({
+		id: 'restore-original-word',
+		name: 'Restore original word',
+		hotkeys: [
+			{
+				modifiers: ['Alt'],
+				key: 'o'
+			}
+		],
+		callback: () => restoreOriginalWord(plugin)
 	});
 }
