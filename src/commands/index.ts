@@ -8,7 +8,7 @@ export function registerCommands(plugin: Plugin): void {
 		hotkeys: [
 			{
 				modifiers: ['Alt'],
-				key: 'f'
+				key: 'F'
 			}
 		],
 		callback: () => fixPreviousSpelling(plugin)
@@ -20,7 +20,7 @@ export function registerCommands(plugin: Plugin): void {
 		hotkeys: [
 			{
 				modifiers: ['Alt'],
-				key: 'c'
+				key: 'C'
 			}
 		],
 		callback: () => cycleSuggestion(plugin)
@@ -32,7 +32,7 @@ export function registerCommands(plugin: Plugin): void {
 		hotkeys: [
 			{
 				modifiers: ['Alt'],
-				key: 'o'
+				key: 'R'
 			}
 		],
 		callback: () => restoreOriginalWord(plugin)

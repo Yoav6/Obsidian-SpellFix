@@ -1,5 +1,15 @@
 import { Editor, MarkdownView } from 'obsidian';
 
+// Store suggestions for the last corrected word
+interface StoredSuggestions {
+	originalWord: string;
+	suggestions: string[];
+	position: { line: number; ch: number; endCh: number };
+	currentIndex: number;
+}
+
+let storedSuggestions: StoredSuggestions | null = null;
+
 export async function fixPreviousSpelling(plugin: any): Promise<void> {
 	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
 	if (!activeView || !activeView.editor) {
@@ -37,16 +47,29 @@ export async function fixPreviousSpelling(plugin: any): Promise<void> {
 			continue;
 		}
 		
-		// Check if this word is misspelled and get suggestion
-		const suggestion = await getSuggestionForWord(word.word);
+		// Check if this word is misspelled and get all suggestions
+		const suggestions = await getAllSuggestionsForWord(word.word);
 		
-		// If we got a suggestion, the word is misspelled - replace it
-		if (suggestion && suggestion !== word.word) {
+		// If we got suggestions, the word is misspelled - replace it with the first suggestion
+		if (suggestions && suggestions.length > 0) {
+			const firstSuggestion = suggestions[0];
 			editor.replaceRange(
-				suggestion,
+				firstSuggestion,
 				{ line: word.startLine, ch: word.startCh },
 				{ line: word.startLine, ch: word.endCh }
 			);
+			
+			// Store all suggestions and original word for cycling with Alt+C and restoring with Alt+r
+			storedSuggestions = {
+				originalWord: word.word,
+				suggestions: suggestions,
+				position: {
+					line: word.startLine,
+					ch: word.startCh,
+					endCh: word.startCh + firstSuggestion.length
+				},
+				currentIndex: 0
+			};
 			return;
 		}
 	}
@@ -88,10 +111,17 @@ interface Word {
 
 function extractWords(text: string, startLine: number, editor: Editor): Word[] {
 	const words: Word[] = [];
-	const wordRegex = /\b[a-zA-Z]{2,}\b/g;
+	// Match sequences of Unicode letters (works for English, Hebrew, Arabic, etc.)
+	// Simple approach: match one or more Unicode letters, we'll filter for length >= 2 later
+	const wordRegex = /\p{L}+/gu;
 	let match;
 	
 	while ((match = wordRegex.exec(text)) !== null) {
+		// Only include words with at least 2 letters
+		if (match[0].length < 2) {
+			continue;
+		}
+		
 		const position = offsetToLineAndCh(editor, startLine, match.index);
 		words.push({
 			word: match[0],
@@ -127,7 +157,7 @@ function offsetToLineAndCh(editor: Editor, startLine: number, offset: number): {
 	};
 }
 
-async function getSuggestionForWord(word: string): Promise<string | null> {
+async function getAllSuggestionsForWord(word: string): Promise<string[] | null> {
 	try {
 		const electron = (window as any).require?.('electron');
 		if (electron) {
@@ -138,7 +168,7 @@ async function getSuggestionForWord(word: string): Promise<string | null> {
 				if (isMisspelled) {
 					const suggestions = webFrame.getWordSuggestions(word);
 					if (suggestions && suggestions.length > 0) {
-						return suggestions[0];
+						return suggestions;
 					}
 				}
 			}
@@ -148,4 +178,85 @@ async function getSuggestionForWord(word: string): Promise<string | null> {
 	}
 	
 	return null;
+}
+
+export function cycleSuggestion(plugin: any): void {
+	if (!storedSuggestions) {
+		return; // No suggestions stored, do nothing
+	}
+	
+	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+	if (!activeView || !activeView.editor) {
+		return;
+	}
+	
+	const editor = activeView.editor;
+	const { suggestions, position, currentIndex } = storedSuggestions;
+	
+	// Read the current word at the stored position to get its actual length
+	const currentLine = editor.getLine(position.line);
+	const currentWord = currentLine.substring(position.ch, position.endCh);
+	
+	// If the word at the position doesn't match any suggestion, the position might be stale
+	// In that case, try to find the word by checking if any suggestion matches
+	const actualEndCh = position.ch + currentWord.length;
+	
+	// Cycle to the next suggestion
+	const nextIndex = (currentIndex + 1) % suggestions.length;
+	const nextSuggestion = suggestions[nextIndex];
+	
+	// Replace the word with the next suggestion
+	editor.replaceRange(
+		nextSuggestion,
+		{ line: position.line, ch: position.ch },
+		{ line: position.line, ch: actualEndCh }
+	);
+	
+	// Update stored suggestions with new index and end position
+	storedSuggestions = {
+		originalWord: storedSuggestions.originalWord,
+		suggestions: suggestions,
+		position: {
+			line: position.line,
+			ch: position.ch,
+			endCh: position.ch + nextSuggestion.length
+		},
+		currentIndex: nextIndex
+	};
+}
+
+export function restoreOriginalWord(plugin: any): void {
+	if (!storedSuggestions) {
+		return; // No suggestions stored, do nothing
+	}
+	
+	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+	if (!activeView || !activeView.editor) {
+		return;
+	}
+	
+	const editor = activeView.editor;
+	const { originalWord, position } = storedSuggestions;
+	
+	// Read the current word at the stored position to get its actual length
+	const currentLine = editor.getLine(position.line);
+	const currentWord = currentLine.substring(position.ch, position.endCh);
+	const actualEndCh = position.ch + currentWord.length;
+	
+	// Replace with the original word
+	editor.replaceRange(
+		originalWord,
+		{ line: position.line, ch: position.ch },
+		{ line: position.line, ch: actualEndCh }
+	);
+	
+	// Update stored suggestions with original word's end position
+	storedSuggestions = {
+		...storedSuggestions,
+		position: {
+			line: position.line,
+			ch: position.ch,
+			endCh: position.ch + originalWord.length
+		}
+	};
 }
