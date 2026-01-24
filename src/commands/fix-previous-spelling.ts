@@ -19,32 +19,23 @@ export async function fixPreviousSpelling(plugin: any): Promise<void> {
 	const editor = activeView.editor;
 	const cursor = editor.getCursor();
 	
-	// Find the paragraph boundaries
-	const paragraphStart = findParagraphStart(editor, cursor.line);
-	const paragraphEnd = findParagraphEnd(editor, cursor.line);
+	// Get the current line text (treat each line independently)
+	const currentLine = cursor.line;
+	const lineText = editor.getLine(currentLine);
 	
-	// Get paragraph text
-	let paragraphText = '';
-	for (let i = paragraphStart; i <= paragraphEnd; i++) {
-		paragraphText += editor.getLine(i);
-		if (i < paragraphEnd) {
-			paragraphText += '\n';
-		}
-	}
-	
-	// Calculate cursor offset in paragraph
-	let cursorOffset = getCursorOffsetInParagraph(editor, cursor, paragraphStart);
+	// Get cursor position within the line
+	let cursorOffset = cursor.ch;
 	
 	// Check if we're in the middle of a word - if so, advance to the end of the word
 	// This ensures we check the complete word, not a partial one
-	if (cursorOffset > 0 && cursorOffset < paragraphText.length) {
-		const charBeforeCursor = paragraphText[cursorOffset - 1];
+	if (cursorOffset > 0 && cursorOffset < lineText.length) {
+		const charBeforeCursor = lineText[cursorOffset - 1];
 		// If previous character is not whitespace, we're inside a word
 		if (charBeforeCursor && !/\s/.test(charBeforeCursor)) {
 			// Scan forward to find the end of the current word
-			while (cursorOffset < paragraphText.length) {
-				const char = paragraphText[cursorOffset];
-				// Stop at whitespace or end of paragraph
+			while (cursorOffset < lineText.length) {
+				const char = lineText[cursorOffset];
+				// Stop at whitespace or end of line
 				if (/\s/.test(char)) {
 					break;
 				}
@@ -53,8 +44,8 @@ export async function fixPreviousSpelling(plugin: any): Promise<void> {
 		}
 	}
 	
-	// Extract words only up to the effective cursor position
-	const words = extractWords(paragraphText.substring(0, cursorOffset), paragraphStart, editor);
+	// Extract words only up to the effective cursor position on the current line
+	const words = extractWords(lineText.substring(0, cursorOffset), currentLine, editor);
 	
 	// Check words backwards - for each word, check if native spellchecker has suggestions
 	for (let i = words.length - 1; i >= 0; i--) {
@@ -93,32 +84,6 @@ export async function fixPreviousSpelling(plugin: any): Promise<void> {
 	}
 }
 
-function findParagraphStart(editor: Editor, line: number): number {
-	let start = line;
-	while (start > 0 && editor.getLine(start - 1).trim() !== '') {
-		start--;
-	}
-	return start;
-}
-
-function findParagraphEnd(editor: Editor, line: number): number {
-	const lineCount = editor.lineCount();
-	let end = line;
-	while (end < lineCount - 1 && editor.getLine(end + 1).trim() !== '') {
-		end++;
-	}
-	return end;
-}
-
-function getCursorOffsetInParagraph(editor: Editor, cursor: { line: number; ch: number }, paragraphStart: number): number {
-	let offset = 0;
-	for (let i = paragraphStart; i < cursor.line; i++) {
-		offset += editor.getLine(i).length + 1; // +1 for newline
-	}
-	offset += cursor.ch;
-	return offset;
-}
-
 interface Word {
 	word: string;
 	startCh: number;
@@ -127,10 +92,9 @@ interface Word {
 	endLine: number;
 }
 
-function extractWords(text: string, startLine: number, editor: Editor): Word[] {
+function extractWords(text: string, lineNumber: number, editor: Editor): Word[] {
 	const words: Word[] = [];
 	// Match sequences of Unicode letters (works for English, Hebrew, Arabic, etc.)
-	// Simple approach: match one or more Unicode letters, we'll filter for length >= 2 later
 	const wordRegex = /\p{L}+/gu;
 	let match;
 	
@@ -140,39 +104,16 @@ function extractWords(text: string, startLine: number, editor: Editor): Word[] {
 			continue;
 		}
 		
-		const position = offsetToLineAndCh(editor, startLine, match.index);
 		words.push({
 			word: match[0],
-			startCh: position.ch,
-			endCh: position.ch + match[0].length,
-			startLine: position.line,
-			endLine: position.line
+			startCh: match.index,
+			endCh: match.index + match[0].length,
+			startLine: lineNumber,
+			endLine: lineNumber
 		});
 	}
 	
 	return words;
-}
-
-function offsetToLineAndCh(editor: Editor, startLine: number, offset: number): { line: number; ch: number } {
-	let currentOffset = 0;
-	let line = startLine;
-	
-	while (line < editor.lineCount()) {
-		const lineLength = editor.getLine(line).length;
-		if (currentOffset + lineLength >= offset) {
-			return {
-				line: line,
-				ch: offset - currentOffset
-			};
-		}
-		currentOffset += lineLength + 1; // +1 for newline
-		line++;
-	}
-	
-	return {
-		line: editor.lineCount() - 1,
-		ch: editor.getLine(editor.lineCount() - 1).length
-	};
 }
 
 // Load custom dictionary words
