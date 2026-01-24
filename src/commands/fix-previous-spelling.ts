@@ -33,9 +33,27 @@ export async function fixPreviousSpelling(plugin: any): Promise<void> {
 	}
 	
 	// Calculate cursor offset in paragraph
-	const cursorOffset = getCursorOffsetInParagraph(editor, cursor, paragraphStart);
+	let cursorOffset = getCursorOffsetInParagraph(editor, cursor, paragraphStart);
 	
-	// Extract all words before cursor
+	// Check if we're in the middle of a word - if so, advance to the end of the word
+	// This ensures we check the complete word, not a partial one
+	if (cursorOffset > 0 && cursorOffset < paragraphText.length) {
+		const charBeforeCursor = paragraphText[cursorOffset - 1];
+		// If previous character is not whitespace, we're inside a word
+		if (charBeforeCursor && !/\s/.test(charBeforeCursor)) {
+			// Scan forward to find the end of the current word
+			while (cursorOffset < paragraphText.length) {
+				const char = paragraphText[cursorOffset];
+				// Stop at whitespace or end of paragraph
+				if (/\s/.test(char)) {
+					break;
+				}
+				cursorOffset++;
+			}
+		}
+	}
+	
+	// Extract words only up to the effective cursor position
 	const words = extractWords(paragraphText.substring(0, cursorOffset), paragraphStart, editor);
 	
 	// Check words backwards - for each word, check if native spellchecker has suggestions
