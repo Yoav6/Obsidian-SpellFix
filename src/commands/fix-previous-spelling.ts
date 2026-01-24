@@ -216,7 +216,13 @@ export function cycleSuggestion(plugin: any): void {
 	}
 	
 	const editor = activeView.editor;
+	const cursor = editor.getCursor();
 	const { suggestions, position, currentIndex } = storedSuggestions;
+	
+	// Only cycle if cursor is on the same line as the stored suggestion
+	if (cursor.line !== position.line) {
+		return;
+	}
 	
 	// Read the current word at the stored position to get its actual length
 	const currentLine = editor.getLine(position.line);
@@ -261,7 +267,13 @@ export function restoreOriginalWord(plugin: any): void {
 	}
 	
 	const editor = activeView.editor;
+	const cursor = editor.getCursor();
 	const { originalWord, position } = storedSuggestions;
+	
+	// Only restore if cursor is on the same line as the stored suggestion
+	if (cursor.line !== position.line) {
+		return;
+	}
 	
 	// Read the current word at the stored position to get its actual length
 	const currentLine = editor.getLine(position.line);
