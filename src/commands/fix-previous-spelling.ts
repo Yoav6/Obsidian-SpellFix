@@ -157,24 +157,90 @@ function offsetToLineAndCh(editor: Editor, startLine: number, offset: number): {
 	};
 }
 
+// Load custom dictionary words
+let customDictionaryWords: Set<string> | null = null;
+
+async function loadCustomDictionary(): Promise<Set<string>> {
+	if (customDictionaryWords !== null) {
+		return customDictionaryWords;
+	}
+	
+	customDictionaryWords = new Set<string>();
+	
+	try {
+		const fs = require('fs');
+		const path = require('path');
+		const os = require('os');
+		
+		const homeDir = os.homedir();
+		let dictPath: string | null = null;
+		
+		if (process.platform === 'win32') {
+			// Windows: C:\Users\<username>\AppData\Roaming\obsidian\Custom Dictionary.txt
+			const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
+			dictPath = path.join(appData, 'obsidian', 'Custom Dictionary.txt');
+		} else if (process.platform === 'darwin') {
+			// macOS: ~/Library/Application Support/obsidian/Custom Dictionary.txt
+			dictPath = path.join(homeDir, 'Library', 'Application Support', 'obsidian', 'Custom Dictionary.txt');
+		} else {
+			// Linux - try all known installation methods
+			const possiblePaths = [
+				path.join(homeDir, '.var', 'app', 'md.obsidian.Obsidian', 'config', 'obsidian', 'Custom Dictionary.txt'), // Flatpak
+				path.join(homeDir, 'snap', 'obsidian', 'current', '.config', 'obsidian', 'Custom Dictionary.txt'), // Snap
+				path.join(homeDir, '.config', 'obsidian', 'Custom Dictionary.txt'), // Standard (deb/AppImage)
+			];
+			
+			for (const possiblePath of possiblePaths) {
+				if (fs.existsSync(possiblePath)) {
+					dictPath = possiblePath;
+					break;
+				}
+			}
+		}
+		
+		if (dictPath && fs.existsSync(dictPath)) {
+			const content = fs.readFileSync(dictPath, 'utf8');
+			const words = content.split('\n').map((w: string) => w.trim()).filter((w: string) => w.length > 0);
+			customDictionaryWords = new Set(words);
+		}
+	} catch (err) {
+		// Silently fail if dictionary cannot be loaded
+	}
+	
+	return customDictionaryWords;
+}
+
 async function getAllSuggestionsForWord(word: string): Promise<string[] | null> {
 	try {
+		// First, check if the native spellchecker considers the word misspelled
 		const electron = (window as any).require?.('electron');
 		if (electron) {
 			const webFrame = electron.webFrame || electron.remote?.webFrame;
-			if (webFrame && typeof webFrame.isWordMisspelled === 'function') {
+			if (webFrame && typeof webFrame.isWordMisspelled === 'function' && typeof webFrame.getWordSuggestions === 'function') {
+				// Check if word is misspelled according to the native spellchecker
 				const isMisspelled = webFrame.isWordMisspelled(word);
 				
-				if (isMisspelled) {
-					const suggestions = webFrame.getWordSuggestions(word);
-					if (suggestions && suggestions.length > 0) {
-						return suggestions;
-					}
+				if (!isMisspelled) {
+					return null;
+				}
+				
+				// Word is misspelled according to native spellchecker
+				// Check if it's in the custom dictionary (which webFrame doesn't always respect correctly)
+				const dictionary = await loadCustomDictionary();
+				if (dictionary.has(word) || dictionary.has(word.toLowerCase())) {
+					return null; // Word is in custom dictionary, don't correct it
+				}
+				
+				// Get suggestions
+				const suggestions = webFrame.getWordSuggestions(word);
+				
+				if (suggestions && suggestions.length > 0) {
+					return suggestions;
 				}
 			}
 		}
 	} catch (err) {
-		// webFrame API not available
+		// Silently fail if spellchecker is not available
 	}
 	
 	return null;
