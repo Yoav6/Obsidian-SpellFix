@@ -57,7 +57,7 @@ export async function fixPreviousSpelling(plugin: any): Promise<void> {
 		}
 		
 		// Check if this word is misspelled and get all suggestions
-		const suggestions = await getAllSuggestionsForWord(word.word);
+		const suggestions = await getAllSuggestionsForWord(word.word, plugin);
 		
 		// If we got suggestions, the word is misspelled - replace it with the first suggestion
 		if (suggestions && suggestions.length > 0) {
@@ -169,7 +169,7 @@ async function loadCustomDictionary(): Promise<Set<string>> {
 	return customDictionaryWords;
 }
 
-async function getAllSuggestionsForWord(word: string): Promise<string[] | null> {
+async function getAllSuggestionsForWord(word: string, plugin: any): Promise<string[] | null> {
 	try {
 		// First, check if the native spellchecker considers the word misspelled
 		const electron = (window as any).require?.('electron');
@@ -191,9 +191,46 @@ async function getAllSuggestionsForWord(word: string): Promise<string[] | null> 
 				}
 				
 				// Get suggestions
-				const suggestions = webFrame.getWordSuggestions(word);
+				let suggestions = webFrame.getWordSuggestions(word);
 				
 				if (suggestions && suggestions.length > 0) {
+					// Filter out single-letter suggestions if setting is enabled
+					if (plugin.settings.ignoreSingleLetterSuggestions) {
+						// Parse exceptions (space-separated list of allowed single letters)
+						const exceptions = plugin.settings.singleLetterExceptions
+							.split(/\s+/)
+							.filter((s: string) => s.length === 1);
+						
+						suggestions = suggestions.filter((s: string) => {
+							// Keep suggestions that are longer than 1 character
+							if (s.length > 1) return true;
+							// Keep single-letter suggestions that are in the exceptions list
+							return exceptions.includes(s);
+						});
+						
+						// If filtering removed all suggestions, return null
+						if (suggestions.length === 0) {
+							return null;
+						}
+					}
+					
+					// Filter out user-specified suggestions to ignore
+					if (plugin.settings.suggestionsToIgnore.trim().length > 0) {
+						// Parse ignored suggestions (space-separated list)
+						const ignoredSuggestions = plugin.settings.suggestionsToIgnore
+							.split(/\s+/)
+							.filter((s: string) => s.length > 0);
+						
+						suggestions = suggestions.filter((s: string) => 
+							!ignoredSuggestions.includes(s)
+						);
+						
+						// If filtering removed all suggestions, return null
+						if (suggestions.length === 0) {
+							return null;
+						}
+					}
+					
 					return suggestions;
 				}
 			}
