@@ -15,7 +15,7 @@ export default class SpellFixPlugin extends Plugin {
 		this.addSettingTab(new SpellFixSettingTab(this.app, this));
 		
 		// Register keyboard event for autocorrect
-		this.registerDomEvent(document, 'keydown', async (evt: KeyboardEvent) => {
+		this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
 			// Only handle space key
 			if (evt.key !== ' ') {
 				return;
@@ -36,8 +36,8 @@ export default class SpellFixPlugin extends Plugin {
 			// We'll check the word before the space
 			
 			// Use setTimeout to let the space be inserted first
-			setTimeout(async () => {
-				await autocorrectLastWord(this);
+			setTimeout(() => {
+				autocorrectLastWord(this);
 			}, 0);
 		});
 	}
@@ -51,6 +51,6 @@ export default class SpellFixPlugin extends Plugin {
 	}
 
 	onunload() {
-		console.log('SpellFix plugin unloaded');
+		// Plugin cleanup
 	}
 }

@@ -15,7 +15,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Ignore single letter suggestions')
+			.setName('Ignore single-letter suggestions')
 			.setDesc('Filter out single-character spelling suggestions. Helps prevent incorrect replacements, especially with non-Latin scripts.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.ignoreSingleLetterSuggestions)
@@ -27,7 +27,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 
 		if (this.plugin.settings.ignoreSingleLetterSuggestions) {
 			new Setting(containerEl)
-				.setName('Single letter exceptions')
+				.setName('Single-letter exceptions')
 				.setDesc('Single letters that should NOT be filtered (space-separated). Example: "I a" will keep "I" and "a" as valid suggestions.')
 				.addText(text => text
 					.setPlaceholder('I a')
@@ -50,7 +50,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Keep iterating when a misspelled word has no valid suggestions')
+			.setName('Keep iterating when no valid suggestions are found')
 			.setDesc('When enabled, if a misspelled word has all suggestions filtered out, continue searching for other misspelled words on the line.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.keepIteratingWhenFiltered)
@@ -61,7 +61,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Autocorrect')
-			.setDesc('Automatically check and correct the last word when space is pressed. Uses the same filtering and settings as Alt+F.')
+			.setDesc('Automatically check and correct the last word when space is pressed. Uses the same filtering and settings as the fix previous spelling command.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.autocorrect)
 				.onChange(async (value) => {

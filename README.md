@@ -6,10 +6,16 @@ Quickly fix spelling mistakes without interrupting your flow. Uses keyboard shor
 
 ### Commands
 
-- **Fix previous spelling** (`Alt+F`): Automatically finds and fixes the most recent misspelled word on the current line by accepting the first suggestion from the native spellchecker (if your cursor is in the middle of a word, it will check it as well).
-- **Cycle suggestion** (`Alt+C`): After fixing a word, cycle through all available spelling suggestions to find the best match.
-- **Restore original word** (`Alt+R`): Restore the original misspelled word if you changed your mind.
-- **Add to ignored suggestions** (`Alt+X`): Add the current suggestion to your ignore list, remove it from the cycle list, and move to the next suggestion (or restore the original if no more suggestions are available).
+- **Fix previous spelling**: Automatically finds and fixes the most recent misspelled word on the current line by accepting the first suggestion from the native spellchecker (if your cursor is in the middle of a word, it will check it as well).
+- **Cycle suggestion**: After fixing a word, cycle through all available spelling suggestions to find the best match.
+- **Restore original word**: Restore the original misspelled word if you changed your mind.
+- **Add to ignored suggestions**: Add the current suggestion to your ignore list, remove it from the cycle list, and move to the next suggestion (or restore the original if no more suggestions are available).
+
+**Note:** For a smooth workflow, these commands should be assigned to hotkeys, but you'll need to assign them on your own in Obsidian's Settings → Hotkeys, or by finding the plugin in Settings → Community plugins and clicking the plus icon. I recommend using 
+- `Alt+F` for *Fix previous spelling*
+- `Alt+C` for *Cycle suggestion*
+- `Alt+R` for *Restore original word*
+- `Alt+X` for *Add to ignored suggestions* 
 
 ### Settings
 
@@ -25,12 +31,12 @@ Quickly fix spelling mistakes without interrupting your flow. Uses keyboard shor
 ## Workflow example
 
 1. Type a misspelled word: "teh quick"
-2. Press `Alt+F` → "teh" becomes "the"
-3. Don't like it? Press `Alt+C` to see other suggestions
-4. Still not right? Press `Alt+R` to restore "teh"
-5. Want to prevent this suggestion? Press `Alt+X` to add it to your ignore list
+2. Press your "Fix previous spelling" hotkey (e.g., `Alt+F`) → "teh" becomes "the"
+3. Don't like it? Press your "Cycle suggestion" hotkey (e.g., `Alt+C`) to see other suggestions
+4. Still not right? Press your "Restore original word" hotkey (e.g., `Alt+R`) to restore "teh"
+5. Want to prevent this suggestion? Press your "Add to ignored suggestions" hotkey (e.g., `Alt+X`) to add it to your ignore list
 
-With **Autocorrect** enabled, just type "teh" and after pressing space it automatically becomes "the ". Then you can use Alt+C, Alt+R and Alt+X as needed, like in the example above.
+With **Autocorrect** enabled, just type "teh" and after pressing space it automatically becomes "the ". Then you can use your cycle, restore, and ignore hotkeys as needed, like in the example above.
 
 ## How it works
 
@@ -41,7 +47,7 @@ spellchecker API to detect misspellings and get suggestions, then automatically 
 - Respects your Obsidian custom dictionary - words you've added won't be corrected
 - Works only on the current line (respects line boundaries)
 - If your cursor is in the middle of a word, it checks the complete word
-- All settings and features apply to both manual correction (`Alt+F`) and autocorrect
+- All settings and features apply to both manual correction and autocorrect
 
 ## Language support
 

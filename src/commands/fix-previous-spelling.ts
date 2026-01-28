@@ -1,4 +1,5 @@
 import { Editor, MarkdownView, Notice } from 'obsidian';
+import type SpellFixPlugin from '../../main';
 
 // Store suggestions for the last corrected word
 interface StoredSuggestions {
@@ -10,7 +11,87 @@ interface StoredSuggestions {
 
 let storedSuggestions: StoredSuggestions | null = null;
 
-export async function fixPreviousSpelling(plugin: any): Promise<void> {
+// Cache for custom dictionary words
+let customDictionaryWords: Set<string> | null = null;
+
+async function loadCustomDictionary(plugin: SpellFixPlugin): Promise<Set<string>> {
+	if (customDictionaryWords !== null) {
+		return customDictionaryWords;
+	}
+	
+	customDictionaryWords = new Set<string>();
+	
+	try {
+		// Access Node.js fs module through electron (available in Obsidian)
+		const fs = (window as any).require?.('fs');
+		const path = (window as any).require?.('path');
+		const os = (window as any).require?.('os');
+		
+		if (!fs || !path || !os) {
+			return customDictionaryWords;
+		}
+		
+		const homeDir = os.homedir();
+		
+		let dictPath: string | null = null;
+		
+		// Determine the platform-specific path to Custom Dictionary.txt
+		if (process.platform === 'win32') {
+			// Windows: C:\Users\<username>\AppData\Roaming\obsidian\Custom Dictionary.txt
+			const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
+			dictPath = path.join(appData, 'obsidian', 'Custom Dictionary.txt');
+		} else if (process.platform === 'darwin') {
+			// macOS: ~/Library/Application Support/obsidian/Custom Dictionary.txt
+			dictPath = path.join(homeDir, 'Library', 'Application Support', 'obsidian', 'Custom Dictionary.txt');
+		} else {
+			// Linux - try all known installation methods
+			const possiblePaths = [
+				path.join(homeDir, '.var', 'app', 'md.obsidian.Obsidian', 'config', 'obsidian', 'Custom Dictionary.txt'), // Flatpak
+				path.join(homeDir, 'snap', 'obsidian', 'current', '.config', 'obsidian', 'Custom Dictionary.txt'), // Snap
+				path.join(homeDir, '.config', 'obsidian', 'Custom Dictionary.txt'), // Standard (deb/AppImage)
+			];
+			
+			// Try to read from each path until one succeeds
+			for (const possiblePath of possiblePaths) {
+				try {
+					if (fs.existsSync(possiblePath)) {
+						const content = fs.readFileSync(possiblePath, 'utf8');
+						const words = content.split('\n')
+							.map((w: string) => w.trim())
+							.filter((w: string) => w.length > 0);
+						customDictionaryWords = new Set(words);
+						return customDictionaryWords;
+					}
+				} catch {
+					// Path doesn't exist or can't be read, try next one
+					continue;
+				}
+			}
+			return customDictionaryWords;
+		}
+		
+		// Try to read the dictionary file (Windows/macOS)
+		if (dictPath) {
+			try {
+				if (fs.existsSync(dictPath)) {
+					const content = fs.readFileSync(dictPath, 'utf8');
+					const words = content.split('\n')
+						.map((w: string) => w.trim())
+						.filter((w: string) => w.length > 0);
+					customDictionaryWords = new Set(words);
+				}
+			} catch {
+				// File doesn't exist or can't be read, return empty set
+			}
+		}
+	} catch {
+		// Silently fail if dictionary cannot be loaded
+	}
+	
+	return customDictionaryWords;
+}
+
+export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void> {
 	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
 	if (!activeView || !activeView.editor) {
 		return;
@@ -137,62 +218,9 @@ function extractWords(text: string, lineNumber: number, editor: Editor): Word[] 
 	return words;
 }
 
-// Load custom dictionary words
-let customDictionaryWords: Set<string> | null = null;
-
-async function loadCustomDictionary(): Promise<Set<string>> {
-	if (customDictionaryWords !== null) {
-		return customDictionaryWords;
-	}
-	
-	customDictionaryWords = new Set<string>();
-	
+async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): Promise<string[] | null> {
 	try {
-		const fs = require('fs');
-		const path = require('path');
-		const os = require('os');
-		
-		const homeDir = os.homedir();
-		let dictPath: string | null = null;
-		
-		if (process.platform === 'win32') {
-			// Windows: C:\Users\<username>\AppData\Roaming\obsidian\Custom Dictionary.txt
-			const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
-			dictPath = path.join(appData, 'obsidian', 'Custom Dictionary.txt');
-		} else if (process.platform === 'darwin') {
-			// macOS: ~/Library/Application Support/obsidian/Custom Dictionary.txt
-			dictPath = path.join(homeDir, 'Library', 'Application Support', 'obsidian', 'Custom Dictionary.txt');
-		} else {
-			// Linux - try all known installation methods
-			const possiblePaths = [
-				path.join(homeDir, '.var', 'app', 'md.obsidian.Obsidian', 'config', 'obsidian', 'Custom Dictionary.txt'), // Flatpak
-				path.join(homeDir, 'snap', 'obsidian', 'current', '.config', 'obsidian', 'Custom Dictionary.txt'), // Snap
-				path.join(homeDir, '.config', 'obsidian', 'Custom Dictionary.txt'), // Standard (deb/AppImage)
-			];
-			
-			for (const possiblePath of possiblePaths) {
-				if (fs.existsSync(possiblePath)) {
-					dictPath = possiblePath;
-					break;
-				}
-			}
-		}
-		
-		if (dictPath && fs.existsSync(dictPath)) {
-			const content = fs.readFileSync(dictPath, 'utf8');
-			const words = content.split('\n').map((w: string) => w.trim()).filter((w: string) => w.length > 0);
-			customDictionaryWords = new Set(words);
-		}
-	} catch (err) {
-		// Silently fail if dictionary cannot be loaded
-	}
-	
-	return customDictionaryWords;
-}
-
-async function getAllSuggestionsForWord(word: string, plugin: any): Promise<string[] | null> {
-	try {
-		// First, check if the native spellchecker considers the word misspelled
+		// Check if the native spellchecker considers the word misspelled
 		const electron = (window as any).require?.('electron');
 		if (electron) {
 			const webFrame = electron.webFrame || electron.remote?.webFrame;
@@ -206,7 +234,7 @@ async function getAllSuggestionsForWord(word: string, plugin: any): Promise<stri
 				
 				// Word is misspelled according to native spellchecker
 				// Check if it's in the custom dictionary (which webFrame doesn't always respect correctly)
-				const dictionary = await loadCustomDictionary();
+				const dictionary = await loadCustomDictionary(plugin);
 				if (dictionary.has(word) || dictionary.has(word.toLowerCase())) {
 					return null; // Word is in custom dictionary, don't correct it
 				}
@@ -257,14 +285,14 @@ async function getAllSuggestionsForWord(word: string, plugin: any): Promise<stri
 				}
 			}
 		}
-	} catch (err) {
+	} catch {
 		// Silently fail if spellchecker is not available
 	}
 	
 	return null;
 }
 
-export function cycleSuggestion(plugin: any): void {
+export function cycleSuggestion(plugin: SpellFixPlugin): void {
 	if (!storedSuggestions) {
 		return; // No suggestions stored, do nothing
 	}
@@ -321,7 +349,7 @@ export function cycleSuggestion(plugin: any): void {
 	};
 }
 
-export function restoreOriginalWord(plugin: any): void {
+export function restoreOriginalWord(plugin: SpellFixPlugin): void {
 	if (!storedSuggestions) {
 		return; // No suggestions stored, do nothing
 	}
@@ -363,7 +391,7 @@ export function restoreOriginalWord(plugin: any): void {
 	};
 }
 
-export async function addLastSuggestionToIgnored(plugin: any): Promise<void> {
+export async function addLastSuggestionToIgnored(plugin: SpellFixPlugin): Promise<void> {
 	if (!storedSuggestions) {
 		return; // No suggestions stored, do nothing
 	}
@@ -458,7 +486,7 @@ export async function addLastSuggestionToIgnored(plugin: any): Promise<void> {
 	}
 }
 
-export async function autocorrectLastWord(plugin: any): Promise<void> {
+export async function autocorrectLastWord(plugin: SpellFixPlugin): Promise<void> {
 	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
 	if (!activeView || !activeView.editor) {
 		return;

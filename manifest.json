@@ -1,9 +1,9 @@
 {
 	"id": "spellfix",
 	"name": "SpellFix",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "0.1.0",
-	"description": "seamlessly accept spellchecker suggestions",
+	"description": "Seamlessly accept spellchecker suggestions.",
 	"author": "Yoav Ravid",
 	"authorUrl": "https://x.com/YoavRavid",
 	"fundingUrl": "",
