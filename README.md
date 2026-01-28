@@ -30,7 +30,7 @@ Quickly fix spelling mistakes without interrupting your flow. Uses keyboard shor
 4. Still not right? Press `Alt+R` to restore "teh"
 5. Want to prevent this suggestion? Press `Alt+X` to add it to your ignore list
 
-With **Autocorrect** enabled, just type "teh " (with space) and it automatically becomes "the ", and then use Alt+C, Alt+R and Alt+X if you need, like in the example above. 
+With **Autocorrect** enabled, just type "teh" and after pressing space it automatically becomes "the ". Then you can use Alt+C, Alt+R and Alt+X as needed, like in the example above.
 
 ## How it works
 
@@ -51,4 +51,4 @@ Should works with any language supported by your system's spellchecker. Tested w
 
 ---
 
-Made with ❤️ by [Yoav Ravid](https://x.com/YoavRavid)
+Made with LLMs through Cursor by [Yoav Ravid](https://x.com/YoavRavid)
