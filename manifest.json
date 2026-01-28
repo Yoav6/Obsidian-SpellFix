@@ -3,7 +3,7 @@
 	"name": "SpellFix",
 	"version": "1.0.0",
 	"minAppVersion": "0.1.0",
-	"description": "seamlessly accept spellchecker suggestions",
+	"description": "seamlessly accept spellchecker suggestions.",
 	"author": "Yoav Ravid",
 	"authorUrl": "https://x.com/YoavRavid",
 	"fundingUrl": "",
