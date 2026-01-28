@@ -1,11 +1,11 @@
 {
-	"id": "copy-outline",
-	"name": "Copy Outline",
+	"id": "spellfix",
+	"name": "SpellFix",
 	"version": "1.0.0",
-	"minAppVersion": "0.15.0",
-	"description": "Adds a button to copy the current note's outline to clipboard.",
+	"minAppVersion": "0.1.0",
+	"description": "Adds a shortcut to accept spellchecker suggestions",
 	"author": "Yoav Ravid",
 	"authorUrl": "https://x.com/YoavRavid",
 	"fundingUrl": "",
-	"isDesktopOnly": false
+	"isDesktopOnly": true
 }

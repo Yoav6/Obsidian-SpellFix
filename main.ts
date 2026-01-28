@@ -1,18 +1,18 @@
 import { Plugin, MarkdownView } from 'obsidian';
 import { registerCommands } from './src/commands';
-import { QuickSpellFixSettings, DEFAULT_SETTINGS } from './src/settings';
-import { QuickSpellFixSettingTab } from './src/settings-tab';
+import { SpellFixSettings, DEFAULT_SETTINGS } from './src/settings';
+import { SpellFixSettingTab } from './src/settings-tab';
 import { autocorrectLastWord } from './src/commands/fix-previous-spelling';
 
-export default class QuickSpellFixPlugin extends Plugin {
-	settings: QuickSpellFixSettings;
+export default class SpellFixPlugin extends Plugin {
+	settings: SpellFixSettings;
 
 	async onload() {
 		await this.loadSettings();
 		
 		registerCommands(this);
 		
-		this.addSettingTab(new QuickSpellFixSettingTab(this.app, this));
+		this.addSettingTab(new SpellFixSettingTab(this.app, this));
 		
 		// Register keyboard event for autocorrect
 		this.registerDomEvent(document, 'keydown', async (evt: KeyboardEvent) => {
@@ -51,6 +51,6 @@ export default class QuickSpellFixPlugin extends Plugin {
 	}
 
 	onunload() {
-		console.log('Quick Spell Fix plugin unloaded');
+		console.log('SpellFix plugin unloaded');
 	}
 }

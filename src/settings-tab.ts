@@ -1,10 +1,10 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
-import type QuickSpellFixPlugin from '../main';
+import type SpellFixPlugin from '../main';
 
-export class QuickSpellFixSettingTab extends PluginSettingTab {
-	plugin: QuickSpellFixPlugin;
+export class SpellFixSettingTab extends PluginSettingTab {
+	plugin: SpellFixPlugin;
 
-	constructor(app: App, plugin: QuickSpellFixPlugin) {
+	constructor(app: App, plugin: SpellFixPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}

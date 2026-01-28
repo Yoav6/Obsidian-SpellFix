@@ -1,4 +1,4 @@
-export interface QuickSpellFixSettings {
+export interface SpellFixSettings {
 	ignoreSingleLetterSuggestions: boolean;
 	singleLetterExceptions: string;
 	suggestionsToIgnore: string;
@@ -6,7 +6,7 @@ export interface QuickSpellFixSettings {
 	autocorrect: boolean;
 }
 
-export const DEFAULT_SETTINGS: QuickSpellFixSettings = {
+export const DEFAULT_SETTINGS: SpellFixSettings = {
 	ignoreSingleLetterSuggestions: true,
 	singleLetterExceptions: 'I a',
 	suggestionsToIgnore: '',

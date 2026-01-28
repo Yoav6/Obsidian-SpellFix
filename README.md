@@ -1,4 +1,4 @@
-# Quick Spell Fix
+# SpellFix
 
 Quickly fix spelling mistakes without interrupting your flow. Uses keyboard shortcuts to accept spellchecker suggestions without opening the context menu.
 
