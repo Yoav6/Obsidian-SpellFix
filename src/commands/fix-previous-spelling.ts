@@ -1,4 +1,4 @@
-import { Editor, MarkdownView } from 'obsidian';
+import { Editor, MarkdownView, Notice } from 'obsidian';
 
 // Store suggestions for the last corrected word
 interface StoredSuggestions {
@@ -59,6 +59,25 @@ export async function fixPreviousSpelling(plugin: any): Promise<void> {
 		// Check if this word is misspelled and get all suggestions
 		const suggestions = await getAllSuggestionsForWord(word.word, plugin);
 		
+		// Handle different cases:
+		// null = word not misspelled or in dictionary
+		// [] = word misspelled but all suggestions filtered out
+		// [suggestions] = word misspelled with valid suggestions
+		
+		if (suggestions !== null && suggestions.length === 0) {
+			// Found a misspelled word but all suggestions were filtered out
+			// Always show notice for filtered words
+			new Notice(`No valid suggestions for "${word.word}"`);
+			
+			if (plugin.settings.keepIteratingWhenFiltered) {
+				// Keep searching for other misspelled words
+				continue;
+			} else {
+				// Stop immediately
+				return;
+			}
+		}
+		
 		// If we got suggestions, the word is misspelled - replace it with the first suggestion
 		if (suggestions && suggestions.length > 0) {
 			const firstSuggestion = suggestions[0];
@@ -82,6 +101,8 @@ export async function fixPreviousSpelling(plugin: any): Promise<void> {
 			return;
 		}
 	}
+	
+	// No misspelled words found (all words are correct or in dictionary)
 }
 
 interface Word {
@@ -208,9 +229,10 @@ async function getAllSuggestionsForWord(word: string, plugin: any): Promise<stri
 							return exceptions.includes(s);
 						});
 						
-						// If filtering removed all suggestions, return null
+						// If filtering removed all suggestions, return empty array (not null)
+						// This allows us to distinguish between "not misspelled" and "misspelled but filtered"
 						if (suggestions.length === 0) {
-							return null;
+							return [];
 						}
 					}
 					
@@ -225,9 +247,9 @@ async function getAllSuggestionsForWord(word: string, plugin: any): Promise<stri
 							!ignoredSuggestions.includes(s)
 						);
 						
-						// If filtering removed all suggestions, return null
+						// If filtering removed all suggestions, return empty array (not null)
 						if (suggestions.length === 0) {
-							return null;
+							return [];
 						}
 					}
 					
@@ -258,6 +280,12 @@ export function cycleSuggestion(plugin: any): void {
 	
 	// Only cycle if cursor is on the same line as the stored suggestion
 	if (cursor.line !== position.line) {
+		return;
+	}
+	
+	// Check if there are any suggestions to cycle through
+	if (suggestions.length === 0) {
+		new Notice('No suggestions available to cycle');
 		return;
 	}
 	
@@ -333,4 +361,198 @@ export function restoreOriginalWord(plugin: any): void {
 			endCh: position.ch + originalWord.length
 		}
 	};
+}
+
+export async function addLastSuggestionToIgnored(plugin: any): Promise<void> {
+	if (!storedSuggestions) {
+		return; // No suggestions stored, do nothing
+	}
+	
+	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+	if (!activeView || !activeView.editor) {
+		return;
+	}
+	
+	const editor = activeView.editor;
+	const cursor = editor.getCursor();
+	const { suggestions, currentIndex, position, originalWord } = storedSuggestions;
+	
+	// Only work if cursor is on the same line as the stored suggestion
+	if (cursor.line !== position.line) {
+		return;
+	}
+	
+	// Get the currently applied suggestion
+	const currentSuggestion = suggestions[currentIndex];
+	
+	// Check if it's already in the ignored list
+	const currentIgnored = plugin.settings.suggestionsToIgnore
+		.split(/\s+/)
+		.filter((s: string) => s.length > 0);
+	
+	if (currentIgnored.includes(currentSuggestion)) {
+		// Already ignored, show notice
+		new Notice(`"${currentSuggestion}" is already in ignored suggestions`);
+		return;
+	}
+	
+	// Add to the ignored list and save
+	const newIgnoredList = [currentSuggestion].concat(currentIgnored).join(' ');
+	plugin.settings.suggestionsToIgnore = newIgnoredList;
+	await plugin.saveSettings();
+	
+	// Remove the current suggestion from the list
+	const updatedSuggestions = suggestions.filter((s: string) => s !== currentSuggestion);
+	
+	// Read the current word at the stored position to get its actual length
+	const currentLine = editor.getLine(position.line);
+	const currentWord = currentLine.substring(position.ch, position.endCh);
+	const actualEndCh = position.ch + currentWord.length;
+	
+	if (updatedSuggestions.length > 0) {
+		// Cycle to the next suggestion (wrap around if we were at the end)
+		const nextIndex = currentIndex >= updatedSuggestions.length ? 0 : currentIndex;
+		const nextSuggestion = updatedSuggestions[nextIndex];
+		
+		// Replace with the next suggestion
+		editor.replaceRange(
+			nextSuggestion,
+			{ line: position.line, ch: position.ch },
+			{ line: position.line, ch: actualEndCh }
+		);
+		
+		// Update stored suggestions
+		storedSuggestions = {
+			originalWord: originalWord,
+			suggestions: updatedSuggestions,
+			position: {
+				line: position.line,
+				ch: position.ch,
+				endCh: position.ch + nextSuggestion.length
+			},
+			currentIndex: nextIndex
+		};
+		
+		new Notice(`Added "${currentSuggestion}" to ignored suggestions`);
+	} else {
+		// No more suggestions, restore original word
+		editor.replaceRange(
+			originalWord,
+			{ line: position.line, ch: position.ch },
+			{ line: position.line, ch: actualEndCh }
+		);
+		
+		// Update stored suggestions
+		storedSuggestions = {
+			originalWord: originalWord,
+			suggestions: updatedSuggestions,
+			position: {
+				line: position.line,
+				ch: position.ch,
+				endCh: position.ch + originalWord.length
+			},
+			currentIndex: 0
+		};
+		
+		new Notice(`Added "${currentSuggestion}" to ignored suggestions (no more suggestions, restored original word)`);
+	}
+}
+
+export async function autocorrectLastWord(plugin: any): Promise<void> {
+	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+	if (!activeView || !activeView.editor) {
+		return;
+	}
+
+	const editor = activeView.editor;
+	const cursor = editor.getCursor();
+	
+	// Get the current line text
+	const currentLine = cursor.line;
+	const lineText = editor.getLine(currentLine);
+	
+	// Get cursor position within the line (should be right after the space)
+	const cursorOffset = cursor.ch;
+	
+	// Find the last word by scanning backwards from cursor (before the space)
+	let pos = cursorOffset - 1; // Start before the space
+	
+	// Skip any whitespace before cursor
+	while (pos >= 0 && /\s/.test(lineText[pos])) {
+		pos--;
+	}
+	
+	// If we're at the beginning or only found whitespace, nothing to check
+	if (pos < 0) {
+		return;
+	}
+	
+	// Skip any non-letter characters (like ), ], -, etc.) to find the actual end of the word
+	while (pos >= 0 && !/\p{L}/u.test(lineText[pos])) {
+		pos--;
+	}
+	
+	// If we didn't find any letters, nothing to check
+	if (pos < 0) {
+		return;
+	}
+	
+	const wordEnd = pos + 1;
+	
+	// Scan backwards to find the start of the word
+	let wordStart = pos;
+	while (wordStart > 0 && /\p{L}/u.test(lineText[wordStart - 1])) {
+		wordStart--;
+	}
+	
+	// Extract the word
+	const wordText = lineText.substring(wordStart, wordEnd);
+	
+	// Skip very short words or words with numbers
+	if (wordText.length < 2 || /\d/.test(wordText)) {
+		return;
+	}
+	
+	// Check if this word is misspelled and get all suggestions
+	const suggestions = await getAllSuggestionsForWord(wordText, plugin);
+	
+	// Handle different cases:
+	// null = word not misspelled or in dictionary
+	// [] = word misspelled but all suggestions filtered out
+	// [suggestions] = word misspelled with valid suggestions
+	
+	if (suggestions !== null && suggestions.length === 0) {
+		// Found a misspelled word but all suggestions were filtered out
+		new Notice(`No valid suggestions for "${wordText}"`);
+		return;
+	}
+	
+	// If we got suggestions, the word is misspelled - replace it with the first suggestion
+	if (suggestions && suggestions.length > 0) {
+		const firstSuggestion = suggestions[0];
+		editor.replaceRange(
+			firstSuggestion,
+			{ line: currentLine, ch: wordStart },
+			{ line: currentLine, ch: wordEnd }
+		);
+		
+		// Store all suggestions and original word for cycling with Alt+C and restoring with Alt+R
+		storedSuggestions = {
+			originalWord: wordText,
+			suggestions: suggestions,
+			position: {
+				line: currentLine,
+				ch: wordStart,
+				endCh: wordStart + firstSuggestion.length
+			},
+			currentIndex: 0
+		};
+		
+		// Move cursor to after the space (which is after the corrected word and any punctuation)
+		// cursorOffset is the position after the space
+		// wordEnd is the position after the last letter of the word
+		// The difference is the number of characters (punctuation + space) after the word
+		const charsAfterWord = cursorOffset - wordEnd;
+		editor.setCursor({ line: currentLine, ch: wordStart + firstSuggestion.length + charsAfterWord });
+	}
 }

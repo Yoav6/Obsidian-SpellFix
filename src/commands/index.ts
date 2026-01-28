@@ -1,5 +1,5 @@
 import { Plugin } from 'obsidian';
-import { fixPreviousSpelling, cycleSuggestion, restoreOriginalWord } from './fix-previous-spelling';
+import { fixPreviousSpelling, cycleSuggestion, restoreOriginalWord, addLastSuggestionToIgnored } from './fix-previous-spelling';
 
 export function registerCommands(plugin: Plugin): void {
 	plugin.addCommand({
@@ -36,5 +36,17 @@ export function registerCommands(plugin: Plugin): void {
 			}
 		],
 		callback: () => restoreOriginalWord(plugin)
+	});
+	
+	plugin.addCommand({
+		id: 'add-last-suggestion-to-ignored',
+		name: 'Add last suggestion to ignored suggestions',
+		hotkeys: [
+			{
+				modifiers: ['Alt'],
+				key: 'X'
+			}
+		],
+		callback: () => addLastSuggestionToIgnored(plugin)
 	});
 }

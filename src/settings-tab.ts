@@ -48,5 +48,25 @@ export class QuickSpellFixSettingTab extends PluginSettingTab {
 					this.plugin.settings.suggestionsToIgnore = value;
 					await this.plugin.saveSettings();
 				}));
+
+		new Setting(containerEl)
+			.setName('Keep iterating when a misspelled word has no valid suggestions')
+			.setDesc('When enabled, if a misspelled word has all suggestions filtered out, continue searching for other misspelled words on the line.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.keepIteratingWhenFiltered)
+				.onChange(async (value) => {
+					this.plugin.settings.keepIteratingWhenFiltered = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Autocorrect')
+			.setDesc('Automatically check and correct the last word when space is pressed. Uses the same filtering and settings as Alt+F.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.autocorrect)
+				.onChange(async (value) => {
+					this.plugin.settings.autocorrect = value;
+					await this.plugin.saveSettings();
+				}));
 	}
 }
