@@ -26,7 +26,7 @@ Quickly fix spelling mistakes without interrupting your flow. Uses keyboard shor
 
 - **Keep iterating when no valid suggestions are found** (off by default): When enabled, if a misspelled word has all suggestions filtered out, continue searching for other misspelled words on the line instead of stopping.
 
-- **Autocorrect** (off by default): Automatically check and correct the last word when you press space. Uses the same filtering and settings as `Alt+F`.
+- **Autocorrect** (off by default): Automatically check and correct the last word when you press space. Uses the same filtering and settings as manuall correction. Can be toggled on and off using the "Toggle Autocorrect" command.
 
 ## Workflow example
 
