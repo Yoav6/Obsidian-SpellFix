@@ -1,3 +1,4 @@
+import { Notice } from 'obsidian';
 import type SpellFixPlugin from '../../main';
 import { fixPreviousSpelling, cycleSuggestion, restoreOriginalWord, addLastSuggestionToIgnored } from './fix-previous-spelling';
 
@@ -24,5 +25,15 @@ export function registerCommands(plugin: SpellFixPlugin): void {
 		id: 'add-last-suggestion-to-ignored',
 		name: 'Add last suggestion to ignored suggestions',
 		callback: () => addLastSuggestionToIgnored(plugin)
+	});
+	
+	plugin.addCommand({
+		id: 'toggle-autocorrect',
+		name: 'Toggle autocorrect',
+		callback: async () => {
+			plugin.settings.autocorrect = !plugin.settings.autocorrect;
+			await plugin.saveSettings();
+			new Notice(`Autocorrect ${plugin.settings.autocorrect ? 'enabled' : 'disabled'}`);
+		}
 	});
 }
