@@ -245,9 +245,9 @@ async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): P
 				if (suggestions && suggestions.length > 0) {
 					// Filter out single-letter suggestions if setting is enabled
 					if (plugin.settings.ignoreSingleLetterSuggestions) {
-						// Parse exceptions (space-separated list of allowed single letters)
+						// Parse exceptions (underscore-separated list of allowed single letters)
 						const exceptions = plugin.settings.singleLetterExceptions
-							.split(/\s+/)
+							.split('_')
 							.filter((s: string) => s.length === 1);
 						
 						suggestions = suggestions.filter((s: string) => {
@@ -266,9 +266,9 @@ async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): P
 					
 					// Filter out user-specified suggestions to ignore
 					if (plugin.settings.suggestionsToIgnore.trim().length > 0) {
-						// Parse ignored suggestions (space-separated list)
+						// Parse ignored suggestions (underscore-separated list)
 						const ignoredSuggestions = plugin.settings.suggestionsToIgnore
-							.split(/\s+/)
+							.split('_')
 							.filter((s: string) => s.length > 0);
 						
 						suggestions = suggestions.filter((s: string) => 
@@ -415,7 +415,7 @@ export async function addLastSuggestionToIgnored(plugin: SpellFixPlugin): Promis
 	
 	// Check if it's already in the ignored list
 	const currentIgnored = plugin.settings.suggestionsToIgnore
-		.split(/\s+/)
+		.split('_')
 		.filter((s: string) => s.length > 0);
 	
 	if (currentIgnored.includes(currentSuggestion)) {
@@ -425,7 +425,7 @@ export async function addLastSuggestionToIgnored(plugin: SpellFixPlugin): Promis
 	}
 	
 	// Add to the ignored list and save
-	const newIgnoredList = [currentSuggestion].concat(currentIgnored).join(' ');
+	const newIgnoredList = [currentSuggestion].concat(currentIgnored).join('_');
 	plugin.settings.suggestionsToIgnore = newIgnoredList;
 	await plugin.saveSettings();
 	

@@ -26,23 +26,23 @@ export class SpellFixSettingTab extends PluginSettingTab {
 				}));
 
 		if (this.plugin.settings.ignoreSingleLetterSuggestions) {
-			new Setting(containerEl)
-				.setName('Single-letter exceptions')
-				.setDesc('Single letters that should NOT be filtered (space-separated). Example: "I a" will keep "I" and "a" as valid suggestions.')
-				.addText(text => text
-					.setPlaceholder('I a')
-					.setValue(this.plugin.settings.singleLetterExceptions)
-					.onChange(async (value) => {
-						this.plugin.settings.singleLetterExceptions = value;
-						await this.plugin.saveSettings();
-					}));
+		new Setting(containerEl)
+			.setName('Single-letter exceptions')
+			.setDesc('Single letters that should NOT be filtered (underscore-separated). Example: "I_a" will keep "I" and "a" as valid suggestions.')
+			.addText(text => text
+				.setPlaceholder('I_a')
+				.setValue(this.plugin.settings.singleLetterExceptions)
+				.onChange(async (value) => {
+					this.plugin.settings.singleLetterExceptions = value;
+					await this.plugin.saveSettings();
+				}));
 		}
 
 		new Setting(containerEl)
 			.setName('Suggestions to ignore')
-			.setDesc('Specific suggestions that should never be used (space-separated). Example: "ht Th" will filter out these suggestions.')
+			.setDesc('Specific suggestions that should never be used (underscore-separated). Example: "ht_Th" will filter out these suggestions.')
 			.addText(text => text
-				.setPlaceholder('ht Th')
+				.setPlaceholder('ht_Th')
 				.setValue(this.plugin.settings.suggestionsToIgnore)
 				.onChange(async (value) => {
 					this.plugin.settings.suggestionsToIgnore = value;

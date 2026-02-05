@@ -8,7 +8,7 @@ export interface SpellFixSettings {
 
 export const DEFAULT_SETTINGS: SpellFixSettings = {
 	ignoreSingleLetterSuggestions: true,
-	singleLetterExceptions: 'I a',
+	singleLetterExceptions: 'I_a',
 	suggestionsToIgnore: '',
 	keepIteratingWhenFiltered: false,
 	autocorrect: false
