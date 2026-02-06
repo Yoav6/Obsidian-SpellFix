@@ -50,6 +50,17 @@ export class SpellFixSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
+			.setName('Suggestions to prioritize')
+			.setDesc('Suggestions that should be moved to the front of the list (underscore-separated). Example: "the_of_and" will prioritize common words.')
+			.addText(text => text
+				.setPlaceholder('the_of_and_a_to_is_that_it')
+				.setValue(this.plugin.settings.suggestionsToPrioritize)
+				.onChange(async (value) => {
+					this.plugin.settings.suggestionsToPrioritize = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
 			.setName('Keep iterating when no valid suggestions are found')
 			.setDesc('When enabled, if a misspelled word has all suggestions filtered out, continue searching for other misspelled words on the line.')
 			.addToggle(toggle => toggle

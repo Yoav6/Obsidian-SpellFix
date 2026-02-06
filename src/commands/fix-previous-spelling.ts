@@ -281,6 +281,33 @@ async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): P
 						}
 					}
 					
+					// Prioritize user-specified suggestions
+					if (plugin.settings.suggestionsToPrioritize.trim().length > 0) {
+						// Parse prioritized suggestions (underscore-separated list)
+						const prioritizedSuggestions = plugin.settings.suggestionsToPrioritize
+							.split('_')
+							.filter((s: string) => s.length > 0);
+						
+						// Separate suggestions into prioritized and non-prioritized
+						const prioritized: string[] = [];
+						const nonPrioritized: string[] = [];
+						
+						for (const suggestion of suggestions) {
+							if (prioritizedSuggestions.includes(suggestion)) {
+								prioritized.push(suggestion);
+							} else {
+								nonPrioritized.push(suggestion);
+							}
+						}
+						
+						// Sort prioritized suggestions by their order in the priority list
+						prioritized.sort((a, b) => 
+							prioritizedSuggestions.indexOf(a) - prioritizedSuggestions.indexOf(b)
+						);
+						
+						suggestions = prioritized.concat(nonPrioritized);
+					}
+					
 					return suggestions;
 				}
 			}
