@@ -125,8 +125,15 @@ export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void>
 		}
 	}
 	
+	// Check if we're inside a fenced code block (if setting is enabled)
+	if (plugin.settings.skipCodeBlocks) {
+		if (isInsideFencedCodeBlock(editor, currentLine)) {
+			return;
+		}
+	}
+	
 	// Extract words only up to the effective cursor position on the current line
-	const words = extractWords(lineText.substring(0, cursorOffset), currentLine, editor);
+	const words = extractWords(lineText.substring(0, cursorOffset), currentLine, editor, plugin);
 	
 	// Check words backwards - for each word, check if native spellchecker has suggestions
 	for (let i = words.length - 1; i >= 0; i--) {
@@ -194,11 +201,25 @@ interface Word {
 	endLine: number;
 }
 
-function extractWords(text: string, lineNumber: number, editor: Editor): Word[] {
+function extractWords(text: string, lineNumber: number, editor: Editor, plugin: SpellFixPlugin): Word[] {
 	const words: Word[] = [];
 	// Match sequences of Unicode letters (works for English, Hebrew, Arabic, etc.)
 	const wordRegex = /\p{L}+/gu;
 	let match;
+	
+	// If skipCodeBlocks is enabled, find inline code regions to exclude
+	const inlineCodeRanges: Array<{start: number; end: number}> = [];
+	if (plugin.settings.skipCodeBlocks) {
+		// Find all inline code spans (text between backticks)
+		const backtickRegex = /`[^`]*`/g;
+		let backtickMatch;
+		while ((backtickMatch = backtickRegex.exec(text)) !== null) {
+			inlineCodeRanges.push({
+				start: backtickMatch.index,
+				end: backtickMatch.index + backtickMatch[0].length
+			});
+		}
+	}
 	
 	while ((match = wordRegex.exec(text)) !== null) {
 		// Only include words with at least 2 letters
@@ -206,16 +227,64 @@ function extractWords(text: string, lineNumber: number, editor: Editor): Word[] 
 			continue;
 		}
 		
+		const wordStart = match.index;
+		const wordEnd = match.index + match[0].length;
+		
+		// Skip words inside inline code if setting is enabled
+		if (plugin.settings.skipCodeBlocks) {
+			const isInsideInlineCode = inlineCodeRanges.some(
+				range => wordStart >= range.start && wordEnd <= range.end
+			);
+			if (isInsideInlineCode) {
+				continue;
+			}
+		}
+		
 		words.push({
 			word: match[0],
-			startCh: match.index,
-			endCh: match.index + match[0].length,
+			startCh: wordStart,
+			endCh: wordEnd,
 			startLine: lineNumber,
 			endLine: lineNumber
 		});
 	}
 	
 	return words;
+}
+
+function isInsideFencedCodeBlock(editor: Editor, line: number): boolean {
+	const lineText = editor.getLine(line);
+	
+	// Check if current line starts with ``` (we're on the fence itself)
+	if (lineText.trimStart().startsWith('```')) {
+		return true; // On a fence line, skip corrections
+	}
+	
+	// Check for fenced code block: scan lines above to see if we're inside ```
+	let insideFencedBlock = false;
+	for (let i = 0; i < line; i++) {
+		const checkLine = editor.getLine(i);
+		// Check if line starts with ``` (fenced code block delimiter)
+		if (checkLine.trimStart().startsWith('```')) {
+			insideFencedBlock = !insideFencedBlock;
+		}
+	}
+	
+	return insideFencedBlock;
+}
+
+function isInsideInlineCode(lineText: string, wordStart: number, wordEnd: number): boolean {
+	// Find all inline code spans (text between backticks)
+	const backtickRegex = /`[^`]*`/g;
+	let match;
+	while ((match = backtickRegex.exec(lineText)) !== null) {
+		const codeStart = match.index;
+		const codeEnd = match.index + match[0].length;
+		if (wordStart >= codeStart && wordEnd <= codeEnd) {
+			return true;
+		}
+	}
+	return false;
 }
 
 async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): Promise<string[] | null> {
@@ -526,6 +595,13 @@ export async function autocorrectLastWord(plugin: SpellFixPlugin): Promise<void>
 	const currentLine = cursor.line;
 	const lineText = editor.getLine(currentLine);
 	
+	// Check if we're inside a fenced code block (if setting is enabled)
+	if (plugin.settings.skipCodeBlocks) {
+		if (isInsideFencedCodeBlock(editor, currentLine)) {
+			return;
+		}
+	}
+	
 	// Get cursor position within the line (should be right after the space)
 	const cursorOffset = cursor.ch;
 	
@@ -558,6 +634,13 @@ export async function autocorrectLastWord(plugin: SpellFixPlugin): Promise<void>
 	let wordStart = pos;
 	while (wordStart > 0 && /\p{L}/u.test(lineText[wordStart - 1])) {
 		wordStart--;
+	}
+	
+	// Check if the word is inside inline code (if setting is enabled)
+	if (plugin.settings.skipCodeBlocks) {
+		if (isInsideInlineCode(lineText, wordStart, wordEnd)) {
+			return;
+		}
 	}
 	
 	// Extract the word

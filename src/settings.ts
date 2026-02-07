@@ -5,6 +5,7 @@ export interface SpellFixSettings {
 	suggestionsToPrioritize: string;
 	keepIteratingWhenFiltered: boolean;
 	autocorrect: boolean;
+	skipCodeBlocks: boolean;
 }
 
 export const DEFAULT_SETTINGS: SpellFixSettings = {
@@ -13,5 +14,6 @@ export const DEFAULT_SETTINGS: SpellFixSettings = {
 	suggestionsToIgnore: '',
 	suggestionsToPrioritize: 'the_of_and_a_to_is_that_it',
 	keepIteratingWhenFiltered: false,
-	autocorrect: false
+	autocorrect: false,
+	skipCodeBlocks: true
 };

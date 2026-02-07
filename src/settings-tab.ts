@@ -79,5 +79,15 @@ export class SpellFixSettingTab extends PluginSettingTab {
 					this.plugin.settings.autocorrect = value;
 					await this.plugin.saveSettings();
 				}));
+
+		new Setting(containerEl)
+			.setName('Skip code blocks')
+			.setDesc('When enabled, spelling corrections will skip text inside code blocks (fenced or inline).')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.skipCodeBlocks)
+				.onChange(async (value) => {
+					this.plugin.settings.skipCodeBlocks = value;
+					await this.plugin.saveSettings();
+				}));
 	}
 }
