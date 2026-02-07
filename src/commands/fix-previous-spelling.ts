@@ -125,14 +125,9 @@ export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void>
 		}
 	}
 	
-	// Check if we're inside a fenced code block (if setting is enabled)
-	if (plugin.settings.skipCodeBlocks) {
-		if (isInsideFencedCodeBlock(editor, currentLine)) {
-			return;
-		}
-	}
-	
 	// Extract words only up to the effective cursor position on the current line
+	// Note: extractWords will skip words inside inline code if skipCodeBlocks is enabled,
+	// but we still allow manual corrections inside fenced code blocks (only autocorrect is disabled there)
 	const words = extractWords(lineText.substring(0, cursorOffset), currentLine, editor, plugin);
 	
 	// Check words backwards - for each word, check if native spellchecker has suggestions
