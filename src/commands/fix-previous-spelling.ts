@@ -11,15 +11,8 @@ interface StoredSuggestions {
 
 let storedSuggestions: StoredSuggestions | null = null;
 
-// Cache for custom dictionary words
-let customDictionaryWords: Set<string> | null = null;
-
-async function loadCustomDictionary(plugin: SpellFixPlugin): Promise<Set<string>> {
-	if (customDictionaryWords !== null) {
-		return customDictionaryWords;
-	}
-	
-	customDictionaryWords = new Set<string>();
+function loadCustomDictionary(): Set<string> {
+	const customDictionaryWords = new Set<string>();
 	
 	try {
 		// Access Node.js fs module through electron (available in Obsidian)
@@ -59,8 +52,7 @@ async function loadCustomDictionary(plugin: SpellFixPlugin): Promise<Set<string>
 						const words = content.split('\n')
 							.map((w: string) => w.trim())
 							.filter((w: string) => w.length > 0);
-						customDictionaryWords = new Set(words);
-						return customDictionaryWords;
+						return new Set(words);
 					}
 				} catch {
 					// Path doesn't exist or can't be read, try next one
@@ -78,7 +70,7 @@ async function loadCustomDictionary(plugin: SpellFixPlugin): Promise<Set<string>
 					const words = content.split('\n')
 						.map((w: string) => w.trim())
 						.filter((w: string) => w.length > 0);
-					customDictionaryWords = new Set(words);
+					return new Set(words);
 				}
 			} catch {
 				// File doesn't exist or can't be read, return empty set
@@ -298,9 +290,18 @@ async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): P
 				
 				// Word is misspelled according to native spellchecker
 				// Check if it's in the custom dictionary (which webFrame doesn't always respect correctly)
-				const dictionary = await loadCustomDictionary(plugin);
-				if (dictionary.has(word) || dictionary.has(word.toLowerCase())) {
+				const dictionary = loadCustomDictionary();
+				if (dictionary.has(word)) {
 					return null; // Word is in custom dictionary, don't correct it
+				}
+				
+				// Check if capitalized word should be ignored because lowercase version is in dictionary
+				// e.g., "Ronit" is ignored if "ronit" is in dictionary, but not vice versa
+				if (plugin.settings.ignoreCapitalizedIfLowercaseInDictionary) {
+					const lowercaseWord = word.toLowerCase();
+					if (word !== lowercaseWord && dictionary.has(lowercaseWord)) {
+						return null; // Lowercase version is in dictionary, ignore this capitalized word
+					}
 				}
 				
 				// Get suggestions

@@ -89,5 +89,15 @@ export class SpellFixSettingTab extends PluginSettingTab {
 					this.plugin.settings.skipCodeBlocks = value;
 					await this.plugin.saveSettings();
 				}));
+
+		new Setting(containerEl)
+			.setName('Ignore capitalized words that appear uncapitalized in dictionary')
+			.setDesc('When enabled, capitalized words (e.g., "Taggable") will be ignored if their lowercase version (e.g., "taggable") is in the dictionary, but not vice versa.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.ignoreCapitalizedIfLowercaseInDictionary)
+				.onChange(async (value) => {
+					this.plugin.settings.ignoreCapitalizedIfLowercaseInDictionary = value;
+					await this.plugin.saveSettings();
+				}));
 	}
 }
