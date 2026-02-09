@@ -441,6 +441,63 @@ export function cycleSuggestion(plugin: SpellFixPlugin): void {
 	};
 }
 
+export function cycleSuggestionBack(plugin: SpellFixPlugin): void {
+	if (!storedSuggestions) {
+		return; // No suggestions stored, do nothing
+	}
+	
+	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+	if (!activeView || !activeView.editor) {
+		return;
+	}
+	
+	const editor = activeView.editor;
+	const cursor = editor.getCursor();
+	const { suggestions, position, currentIndex } = storedSuggestions;
+	
+	// Only cycle if cursor is on the same line as the stored suggestion
+	if (cursor.line !== position.line) {
+		return;
+	}
+	
+	// Check if there are any suggestions to cycle through
+	if (suggestions.length === 0) {
+		new Notice('No suggestions available to cycle');
+		return;
+	}
+	
+	// Read the current word at the stored position to get its actual length
+	const currentLine = editor.getLine(position.line);
+	const currentWord = currentLine.substring(position.ch, position.endCh);
+	
+	// If the word at the position doesn't match any suggestion, the position might be stale
+	// In that case, try to find the word by checking if any suggestion matches
+	const actualEndCh = position.ch + currentWord.length;
+	
+	// Cycle to the previous suggestion (with wrap-around)
+	const prevIndex = (currentIndex - 1 + suggestions.length) % suggestions.length;
+	const prevSuggestion = suggestions[prevIndex];
+	
+	// Replace the word with the previous suggestion
+	editor.replaceRange(
+		prevSuggestion,
+		{ line: position.line, ch: position.ch },
+		{ line: position.line, ch: actualEndCh }
+	);
+	
+	// Update stored suggestions with new index and end position
+	storedSuggestions = {
+		originalWord: storedSuggestions.originalWord,
+		suggestions: suggestions,
+		position: {
+			line: position.line,
+			ch: position.ch,
+			endCh: position.ch + prevSuggestion.length
+		},
+		currentIndex: prevIndex
+	};
+}
+
 export function restoreOriginalWord(plugin: SpellFixPlugin): void {
 	if (!storedSuggestions) {
 		return; // No suggestions stored, do nothing

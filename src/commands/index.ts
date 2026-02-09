@@ -1,6 +1,6 @@
 import { Notice } from 'obsidian';
 import type SpellFixPlugin from '../../main';
-import { fixPreviousSpelling, cycleSuggestion, restoreOriginalWord, addLastSuggestionToIgnored } from './fix-previous-spelling';
+import { fixPreviousSpelling, cycleSuggestion, cycleSuggestionBack, restoreOriginalWord, addLastSuggestionToIgnored } from './fix-previous-spelling';
 
 export function registerCommands(plugin: SpellFixPlugin): void {
 	plugin.addCommand({
@@ -13,6 +13,12 @@ export function registerCommands(plugin: SpellFixPlugin): void {
 		id: 'cycle-suggestion',
 		name: 'Cycle suggestion',
 		callback: () => cycleSuggestion(plugin)
+	});
+	
+	plugin.addCommand({
+		id: 'cycle-suggestion-back',
+		name: 'Cycle suggestion back',
+		callback: () => cycleSuggestionBack(plugin)
 	});
 	
 	plugin.addCommand({
