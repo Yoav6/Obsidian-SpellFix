@@ -99,5 +99,15 @@ export class SpellFixSettingTab extends PluginSettingTab {
 					this.plugin.settings.ignoreCapitalizedIfLowercaseInDictionary = value;
 					await this.plugin.saveSettings();
 				}));
+
+		new Setting(containerEl)
+			.setName('Ignore plural words that appear singular in dictionary')
+			.setDesc('When enabled, words ending with \"s\" are ignored if their singular form (without the \"s\") appears in the dictionary.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.ignorePluralIfSingularInDictionary)
+				.onChange(async (value) => {
+					this.plugin.settings.ignorePluralIfSingularInDictionary = value;
+					await this.plugin.saveSettings();
+				}));
 	}
 }

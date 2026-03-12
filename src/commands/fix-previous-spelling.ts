@@ -83,6 +83,34 @@ function loadCustomDictionary(): Set<string> {
 	return customDictionaryWords;
 }
 
+function shouldIgnoreAsPluralVariant(word: string, dictionary: Set<string>, plugin: SpellFixPlugin): boolean {
+	// Only apply when the setting is enabled
+	if (!plugin.settings.ignorePluralIfSingularInDictionary) {
+		return false;
+	}
+
+	// Require at least 3 characters to avoid cases like "as" -> "a"
+	if (word.length < 3) {
+		return false;
+	}
+
+	// Only consider a trailing ASCII 's' or 'S' as the plural marker
+	const lastChar = word[word.length - 1];
+	if (lastChar !== 's' && lastChar !== 'S') {
+		return false;
+	}
+
+	const singular = word.slice(0, -1);
+	const lowercaseSingular = singular.toLowerCase();
+
+	// Check for the singular form in the dictionary, using both original and lowercase forms
+	if (dictionary.has(singular) || dictionary.has(lowercaseSingular)) {
+		return true;
+	}
+
+	return false;
+}
+
 export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void> {
 	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
 	if (!activeView || !activeView.editor) {
@@ -293,6 +321,11 @@ async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): P
 				const dictionary = loadCustomDictionary();
 				if (dictionary.has(word)) {
 					return null; // Word is in custom dictionary, don't correct it
+				}
+
+				// Ignore plural forms whose singular variant appears in the dictionary
+				if (shouldIgnoreAsPluralVariant(word, dictionary, plugin)) {
+					return null;
 				}
 				
 				// Check if capitalized word should be ignored because lowercase version is in dictionary
