@@ -254,6 +254,13 @@ function extractWords(text: string, lineNumber: number, editor: Editor, plugin: 
 				continue;
 			}
 		}
+
+		// Skip words inside LaTeX math ($...$ or $$...$$) if setting is enabled
+		if (plugin.settings.skipLatexMath) {
+			if (isInsideLatexMath(editor, lineNumber, wordStart)) {
+				continue;
+			}
+		}
 		
 		words.push({
 			word: match[0],
@@ -300,6 +307,41 @@ function isInsideInlineCode(lineText: string, wordStart: number, wordEnd: number
 		}
 	}
 	return false;
+}
+
+function isInsideLatexMath(editor: Editor, line: number, charPos: number): boolean {
+	const state = { insideDisplayMath: false, insideInlineMath: false };
+	for (let i = 0; i <= line; i++) {
+		const lineText = editor.getLine(i);
+		const limit = i === line ? charPos : lineText.length;
+		scanLatexMathDelimiters(lineText, limit, state);
+	}
+	return state.insideDisplayMath || state.insideInlineMath;
+}
+
+function scanLatexMathDelimiters(
+	lineText: string,
+	limit: number,
+	state: { insideDisplayMath: boolean; insideInlineMath: boolean }
+): void {
+	let pos = 0;
+	while (pos < limit) {
+		if (lineText.startsWith('$$', pos)) {
+			if (pos + 2 <= limit) {
+				state.insideDisplayMath = !state.insideDisplayMath;
+				pos += 2;
+			} else {
+				break;
+			}
+		} else if (lineText[pos] === '$') {
+			if (!state.insideDisplayMath) {
+				state.insideInlineMath = !state.insideInlineMath;
+			}
+			pos += 1;
+		} else {
+			pos += 1;
+		}
+	}
 }
 
 async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): Promise<string[] | null> {
@@ -725,6 +767,13 @@ export async function autocorrectLastWord(plugin: SpellFixPlugin): Promise<void>
 	// Check if the word is inside inline code (if setting is enabled)
 	if (plugin.settings.skipCodeBlocks) {
 		if (isInsideInlineCode(lineText, wordStart, wordEnd)) {
+			return;
+		}
+	}
+
+	// Check if the word is inside LaTeX math ($...$ or $$...$$) if setting is enabled
+	if (plugin.settings.skipLatexMath) {
+		if (isInsideLatexMath(editor, currentLine, wordStart)) {
 			return;
 		}
 	}

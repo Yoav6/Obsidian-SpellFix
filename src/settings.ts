@@ -6,6 +6,7 @@ export interface SpellFixSettings {
 	keepIteratingWhenFiltered: boolean;
 	autocorrect: boolean;
 	skipCodeBlocks: boolean;
+	skipLatexMath: boolean;
 	ignoreCapitalizedIfLowercaseInDictionary: boolean;
 	ignorePluralIfSingularInDictionary: boolean;
 }
@@ -18,6 +19,7 @@ export const DEFAULT_SETTINGS: SpellFixSettings = {
 	keepIteratingWhenFiltered: false,
 	autocorrect: false,
 	skipCodeBlocks: true,
+	skipLatexMath: true,
 	ignoreCapitalizedIfLowercaseInDictionary: true,
 	ignorePluralIfSingularInDictionary: false
 };

@@ -91,6 +91,16 @@ export class SpellFixSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
+			.setName('Skip LaTeX math')
+			.setDesc('When enabled, spelling corrections will skip text inside LaTeX math (inline $...$ and display $$...$$).')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.skipLatexMath)
+				.onChange(async (value) => {
+					this.plugin.settings.skipLatexMath = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
 			.setName('Ignore capitalized words that appear uncapitalized in dictionary')
 			.setDesc('When enabled, capitalized words (e.g., "Taggable") will be ignored if their lowercase version (e.g., "taggable") is in the dictionary, but not vice versa.')
 			.addToggle(toggle => toggle
