@@ -243,6 +243,22 @@ this.registerInterval(window.setInterval(() => { /* ... */ }, 1000));
 - Settings not persisting: ensure `loadData`/`saveData` are awaited and you re-render the UI after changes.
 - Mobile-only issues: confirm you're not using desktop-only APIs; check `isDesktopOnly` and adjust.
 
+## Testing
+
+- After code changes, always run `npm run check`
+- Before releases, run `npm run test:all` (Obsidian must be open on Plugin Development Vault)
+- Put testable logic in pure functions under `src/utils/`
+- Unit tests go in `tests/unit/`; E2E tests in `tests/e2e/`
+- Use the Crucible skill when writing unit tests
+- See [gapmiss/obsidian-plugin-skill](https://github.com/gapmiss/obsidian-plugin-skill) for community scanner / ESLint guidance
+- See [TESTING.md](TESTING.md) for setup and commands
+
+### ESLint rule overrides (pending implementation plan)
+
+- `main.ts` — `obsidianmd/prefer-active-doc` disabled until `activeDocument` is available in the pinned `obsidian` types
+- `src/commands/fix-previous-spelling.ts` — `@typescript-eslint/no-unsafe-*` and `no-explicit-any` disabled until Node/Electron spellchecker APIs are properly typed
+- `src/settings-tab.ts` — `obsidianmd/ui/sentence-case` and `no-useless-escape` disabled until settings copy is revised
+
 ## References
 
 - Obsidian sample plugin: https://github.com/obsidianmd/obsidian-sample-plugin

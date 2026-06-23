@@ -5,7 +5,7 @@ import { SpellFixSettingTab } from './src/settings-tab';
 import { autocorrectLastWord } from './src/commands/fix-previous-spelling';
 
 export default class SpellFixPlugin extends Plugin {
-	settings: SpellFixSettings;
+	settings: SpellFixSettings = DEFAULT_SETTINGS;
 
 	async onload() {
 		await this.loadSettings();
@@ -36,14 +36,18 @@ export default class SpellFixPlugin extends Plugin {
 			// We'll check the word before the space
 			
 			// Use setTimeout to let the space be inserted first
-			setTimeout(() => {
-				autocorrectLastWord(this);
+			window.setTimeout(() => {
+				void autocorrectLastWord(this);
 			}, 0);
 		});
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			(await this.loadData()) as Partial<SpellFixSettings>,
+		);
 	}
 
 	async saveSettings() {

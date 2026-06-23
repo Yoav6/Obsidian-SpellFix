@@ -22,3 +22,6 @@ data.json
 .DS_Store
 
 notes and references.md
+
+__obsidian_e2e__/
+.obsidian-e2e-artifacts/
