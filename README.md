@@ -36,7 +36,7 @@ Quickly fix spelling mistakes without interrupting your flow. Uses keyboard shor
 4. Still not right? Press your "Restore original word" hotkey (e.g., `Alt+R`) to restore "teh"
 5. Want to prevent this suggestion? Press your "Add to ignored suggestions" hotkey (e.g., `Alt+X`) to add it to your ignore list
 
-With **Autocorrect** enabled, just type "teh" and after pressing space it automatically becomes "the ". Then you can use your cycle, restore, and ignore hotkeys as needed, like in the example above.
+With **Autocorrect** enabled, just type "teh" and after pressing space it automatically becomes "the ". Then you can use your cycle, restore, and ignore hotkeys as needed, like in the example above. 
 
 ## How it works
 
