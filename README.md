@@ -55,10 +55,6 @@ Should works with any language supported by your system's spellchecker. Tested w
 - English
 - Hebrew
 
-## Installation
-
-This plugin hasn't been approved by Obsidian yet, so it can't be installed from the community plugins interface. The best way to install it is through the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin.
-
 ---
 
-Made with LLMs through Cursor by [Yoav Ravid](https://x.com/YoavRavid)
+Made with LLMs in Cursor by [Yoav Ravid](https://x.com/YoavRavid)
