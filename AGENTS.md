@@ -78,9 +78,9 @@ npm run build
 - Keep `minAppVersion` accurate when using newer APIs.
 - Canonical requirements are coded here: https://github.com/obsidianmd/obsidian-releases/blob/master/.github/workflows/validate-plugin-entry.yml
 
-## Testing
+## Manual plugin install
 
-- Manual install for testing: copy `main.js`, `manifest.json`, `styles.css` (if any) to:
+- Copy `main.js`, `manifest.json`, `styles.css` (if any) to:
   ```
   <Vault>/.obsidian/plugins/<plugin-id>/
   ```
@@ -246,18 +246,27 @@ this.registerInterval(window.setInterval(() => { /* ... */ }, 1000));
 ## Testing
 
 - After code changes, always run `npm run check`
-- Before releases, run `npm run test:all` (Obsidian must be open on Plugin Development Vault)
-- Put testable logic in pure functions under `src/utils/`
+- For E2E during development, run `npm run test:e2e` (disables other community plugins except BRAT, Hot Reload, and SpellFix)
+- Before releases, run `npm run test:release` to include a full-plugin-stack conflict check (Obsidian must be open on Plugin Development Vault)
+- Put testable logic in pure functions under `src/utils/` — do not add new pure logic to `src/commands/fix-previous-spelling.ts`
 - Unit tests go in `tests/unit/`; E2E tests in `tests/e2e/`
 - Use the Crucible skill when writing unit tests
 - See [gapmiss/obsidian-plugin-skill](https://github.com/gapmiss/obsidian-plugin-skill) for community scanner / ESLint guidance
 - See [TESTING.md](TESTING.md) for setup and commands
 
-### ESLint rule overrides (pending implementation plan)
+### Testable util modules
+
+| Module | Responsibility | Unit tests |
+|--------|----------------|------------|
+| `src/utils/spelling-rules.ts` | Plural/capitalized ignore rules, short-word guard | `tests/unit/spelling-rules.test.ts` |
+| `src/utils/suggestion-filter.ts` | Filter, ignore, and prioritize suggestions | `tests/unit/suggestion-filter.test.ts` |
+| `src/utils/code-detection.ts` | Inline code, fenced blocks, LaTeX math | `tests/unit/code-detection.test.ts` |
+| `src/utils/word-extraction.ts` | Unicode word extraction with skip regions | `tests/unit/word-extraction.test.ts` |
+| `src/utils/dictionary.ts` | Dictionary file parsing and Linux paths | `tests/unit/dictionary.test.ts` |
+
+### ESLint rule overrides
 
 - `main.ts` — `obsidianmd/prefer-active-doc` disabled until `activeDocument` is available in the pinned `obsidian` types
-- `src/commands/fix-previous-spelling.ts` — `@typescript-eslint/no-unsafe-*` and `no-explicit-any` disabled until Node/Electron spellchecker APIs are properly typed
-- `src/settings-tab.ts` — `obsidianmd/ui/sentence-case` and `no-useless-escape` disabled until settings copy is revised
 
 ## References
 

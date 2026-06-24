@@ -1,7 +1,19 @@
 import { Editor, MarkdownView, Notice } from 'obsidian';
 import type SpellFixPlugin from '../../main';
+import { loadCustomDictionary } from '../utils/dictionary';
+import {
+	isInsideFencedCodeBlockFromLines,
+	isInsideInlineCode,
+	isInsideLatexMathFromLines,
+} from '../utils/code-detection';
+import { applySuggestionFilters } from '../utils/suggestion-filter';
+import {
+	isWordTooShortToCheck,
+	shouldIgnoreAsPluralVariant,
+	shouldIgnoreCapitalizedVariant,
+} from '../utils/spelling-rules';
+import { extractWordsFromLine, type Word } from '../utils/word-extraction';
 
-// Store suggestions for the last corrected word
 interface StoredSuggestions {
 	originalWord: string;
 	suggestions: string[];
@@ -9,106 +21,92 @@ interface StoredSuggestions {
 	currentIndex: number;
 }
 
-let storedSuggestions: StoredSuggestions | null = null;
-
-function loadCustomDictionary(): Set<string> {
-	const customDictionaryWords = new Set<string>();
-	
-	try {
-		// Access Node.js fs module through electron (available in Obsidian)
-		const fs = (window as any).require?.('fs');
-		const path = (window as any).require?.('path');
-		const os = (window as any).require?.('os');
-		
-		if (!fs || !path || !os) {
-			return customDictionaryWords;
-		}
-		
-		const homeDir = os.homedir();
-		
-		let dictPath: string | null = null;
-		
-		// Determine the platform-specific path to Custom Dictionary.txt
-		if (process.platform === 'win32') {
-			// Windows: C:\Users\<username>\AppData\Roaming\obsidian\Custom Dictionary.txt
-			const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
-			dictPath = path.join(appData, 'obsidian', 'Custom Dictionary.txt');
-		} else if (process.platform === 'darwin') {
-			// macOS: ~/Library/Application Support/obsidian/Custom Dictionary.txt
-			dictPath = path.join(homeDir, 'Library', 'Application Support', 'obsidian', 'Custom Dictionary.txt');
-		} else {
-			// Linux - try all known installation methods
-			const possiblePaths = [
-				path.join(homeDir, '.var', 'app', 'md.obsidian.Obsidian', 'config', 'obsidian', 'Custom Dictionary.txt'), // Flatpak
-				path.join(homeDir, 'snap', 'obsidian', 'current', '.config', 'obsidian', 'Custom Dictionary.txt'), // Snap
-				path.join(homeDir, '.config', 'obsidian', 'Custom Dictionary.txt'), // Standard (deb/AppImage)
-			];
-			
-			// Try to read from each path until one succeeds
-			for (const possiblePath of possiblePaths) {
-				try {
-					if (fs.existsSync(possiblePath)) {
-						const content = fs.readFileSync(possiblePath, 'utf8');
-						const words = content.split('\n')
-							.map((w: string) => w.trim())
-							.filter((w: string) => w.length > 0);
-						return new Set(words);
-					}
-				} catch {
-					// Path doesn't exist or can't be read, try next one
-					continue;
-				}
-			}
-			return customDictionaryWords;
-		}
-		
-		// Try to read the dictionary file (Windows/macOS)
-		if (dictPath) {
-			try {
-				if (fs.existsSync(dictPath)) {
-					const content = fs.readFileSync(dictPath, 'utf8');
-					const words = content.split('\n')
-						.map((w: string) => w.trim())
-						.filter((w: string) => w.length > 0);
-					return new Set(words);
-				}
-			} catch {
-				// File doesn't exist or can't be read, return empty set
-			}
-		}
-	} catch {
-		// Silently fail if dictionary cannot be loaded
-	}
-	
-	return customDictionaryWords;
+interface SpellcheckerApi {
+	isWordMisspelled: (word: string) => boolean;
+	getWordSuggestions: (word: string) => string[];
 }
 
-function shouldIgnoreAsPluralVariant(word: string, dictionary: Set<string>, plugin: SpellFixPlugin): boolean {
-	// Only apply when the setting is enabled
-	if (!plugin.settings.ignorePluralIfSingularInDictionary) {
-		return false;
+let storedSuggestions: StoredSuggestions | null = null;
+
+function getSpellcheckerApi(): SpellcheckerApi | null {
+	try {
+		const electron = (window as { require?: (id: string) => unknown }).require?.('electron') as
+			| {
+					webFrame?: SpellcheckerApi;
+					remote?: { webFrame?: SpellcheckerApi };
+			  }
+			| undefined;
+		if (!electron) return null;
+
+		const webFrame = electron.webFrame ?? electron.remote?.webFrame;
+		if (
+			webFrame &&
+			typeof webFrame.isWordMisspelled === 'function' &&
+			typeof webFrame.getWordSuggestions === 'function'
+		) {
+			return webFrame;
+		}
+	} catch {
+		// Spellchecker not available
+	}
+	return null;
+}
+
+function isInsideFencedCodeBlock(editor: Editor, line: number): boolean {
+	return isInsideFencedCodeBlockFromLines((i) => editor.getLine(i), line);
+}
+
+function isInsideLatexMath(editor: Editor, line: number, charPos: number): boolean {
+	return isInsideLatexMathFromLines((i) => editor.getLine(i), line, charPos);
+}
+
+function extractWords(text: string, lineNumber: number, editor: Editor, plugin: SpellFixPlugin): Word[] {
+	return extractWordsFromLine(
+		text,
+		lineNumber,
+		plugin.settings,
+		(charPos) => isInsideLatexMath(editor, lineNumber, charPos)
+	);
+}
+
+async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): Promise<string[] | null> {
+	try {
+		const webFrame = getSpellcheckerApi();
+		if (!webFrame) return null;
+
+		if (!webFrame.isWordMisspelled(word)) {
+			return null;
+		}
+
+		const dictionary = loadCustomDictionary();
+		if (dictionary.has(word)) {
+			return null;
+		}
+
+		if (shouldIgnoreAsPluralVariant(word, dictionary, plugin.settings)) {
+			return null;
+		}
+
+		if (shouldIgnoreCapitalizedVariant(word, dictionary, plugin.settings)) {
+			return null;
+		}
+
+		const rawSuggestions = webFrame.getWordSuggestions(word);
+		if (!rawSuggestions || rawSuggestions.length === 0) {
+			return null;
+		}
+
+		const filtered = applySuggestionFilters(rawSuggestions, plugin.settings);
+		if (filtered.length === 0) {
+			return [];
+		}
+
+		return filtered;
+	} catch {
+		// Silently fail if spellchecker is not available
 	}
 
-	// Require at least 3 characters to avoid cases like "as" -> "a"
-	if (word.length < 3) {
-		return false;
-	}
-
-	// Only consider a trailing ASCII 's' or 'S' as the plural marker
-	const lastChar = word[word.length - 1];
-	if (lastChar !== 's' && lastChar !== 'S') {
-		return false;
-	}
-
-	const singular = word.slice(0, -1);
-	const lowercaseSingular = singular.toLowerCase();
-
-	// Check for the singular form in the dictionary, using both original and lowercase forms
-	if (dictionary.has(singular) || dictionary.has(lowercaseSingular)) {
-		return true;
-	}
-
-	return false;
+	return null;
 }
 
 export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void> {
@@ -119,24 +117,17 @@ export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void>
 
 	const editor = activeView.editor;
 	const cursor = editor.getCursor();
-	
-	// Get the current line text (treat each line independently)
+
 	const currentLine = cursor.line;
 	const lineText = editor.getLine(currentLine);
-	
-	// Get cursor position within the line
+
 	let cursorOffset = cursor.ch;
-	
-	// Check if we're in the middle of a word - if so, advance to the end of the word
-	// This ensures we check the complete word, not a partial one
+
 	if (cursorOffset > 0 && cursorOffset < lineText.length) {
 		const charBeforeCursor = lineText[cursorOffset - 1];
-		// If previous character is not whitespace, we're inside a word
 		if (charBeforeCursor && !/\s/.test(charBeforeCursor)) {
-			// Scan forward to find the end of the current word
 			while (cursorOffset < lineText.length) {
 				const char = lineText[cursorOffset];
-				// Stop at whitespace or end of line
 				if (/\s/.test(char)) {
 					break;
 				}
@@ -144,44 +135,27 @@ export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void>
 			}
 		}
 	}
-	
-	// Extract words only up to the effective cursor position on the current line
-	// Note: extractWords will skip words inside inline code if skipCodeBlocks is enabled,
-	// but we still allow manual corrections inside fenced code blocks (only autocorrect is disabled there)
+
 	const words = extractWords(lineText.substring(0, cursorOffset), currentLine, editor, plugin);
-	
-	// Check words backwards - for each word, check if native spellchecker has suggestions
+
 	for (let i = words.length - 1; i >= 0; i--) {
 		const word = words[i];
-		
-		// Skip very short words or words with numbers
-		if (word.word.length < 2 || /\d/.test(word.word)) {
+
+		if (isWordTooShortToCheck(word.word)) {
 			continue;
 		}
-		
-		// Check if this word is misspelled and get all suggestions
+
 		const suggestions = await getAllSuggestionsForWord(word.word, plugin);
-		
-		// Handle different cases:
-		// null = word not misspelled or in dictionary
-		// [] = word misspelled but all suggestions filtered out
-		// [suggestions] = word misspelled with valid suggestions
-		
+
 		if (suggestions !== null && suggestions.length === 0) {
-			// Found a misspelled word but all suggestions were filtered out
-			// Always show notice for filtered words
 			new Notice(`No valid suggestions for "${word.word}"`);
-			
+
 			if (plugin.settings.keepIteratingWhenFiltered) {
-				// Keep searching for other misspelled words
 				continue;
-			} else {
-				// Stop immediately
-				return;
 			}
+			return;
 		}
-		
-		// If we got suggestions, the word is misspelled - replace it with the first suggestion
+
 		if (suggestions && suggestions.length > 0) {
 			const firstSuggestion = suggestions[0];
 			editor.replaceRange(
@@ -189,523 +163,235 @@ export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void>
 				{ line: word.startLine, ch: word.startCh },
 				{ line: word.startLine, ch: word.endCh }
 			);
-			
-			// Store all suggestions and original word for cycling with Alt+C and restoring with Alt+r
+
 			storedSuggestions = {
 				originalWord: word.word,
 				suggestions: suggestions,
 				position: {
 					line: word.startLine,
 					ch: word.startCh,
-					endCh: word.startCh + firstSuggestion.length
+					endCh: word.startCh + firstSuggestion.length,
 				},
-				currentIndex: 0
+				currentIndex: 0,
 			};
 			return;
 		}
 	}
-	
-	// No misspelled words found (all words are correct or in dictionary)
-}
-
-interface Word {
-	word: string;
-	startCh: number;
-	endCh: number;
-	startLine: number;
-	endLine: number;
-}
-
-function extractWords(text: string, lineNumber: number, editor: Editor, plugin: SpellFixPlugin): Word[] {
-	const words: Word[] = [];
-	// Match sequences of Unicode letters (works for English, Hebrew, Arabic, etc.)
-	const wordRegex = /\p{L}+/gu;
-	let match;
-	
-	// If skipCodeBlocks is enabled, find inline code regions to exclude
-	const inlineCodeRanges: Array<{start: number; end: number}> = [];
-	if (plugin.settings.skipCodeBlocks) {
-		// Find all inline code spans (text between backticks)
-		const backtickRegex = /`[^`]*`/g;
-		let backtickMatch;
-		while ((backtickMatch = backtickRegex.exec(text)) !== null) {
-			inlineCodeRanges.push({
-				start: backtickMatch.index,
-				end: backtickMatch.index + backtickMatch[0].length
-			});
-		}
-	}
-	
-	while ((match = wordRegex.exec(text)) !== null) {
-		// Only include words with at least 2 letters
-		if (match[0].length < 2) {
-			continue;
-		}
-		
-		const wordStart = match.index;
-		const wordEnd = match.index + match[0].length;
-		
-		// Skip words inside inline code if setting is enabled
-		if (plugin.settings.skipCodeBlocks) {
-			const isInsideInlineCode = inlineCodeRanges.some(
-				range => wordStart >= range.start && wordEnd <= range.end
-			);
-			if (isInsideInlineCode) {
-				continue;
-			}
-		}
-
-		// Skip words inside LaTeX math ($...$ or $$...$$) if setting is enabled
-		if (plugin.settings.skipLatexMath) {
-			if (isInsideLatexMath(editor, lineNumber, wordStart)) {
-				continue;
-			}
-		}
-		
-		words.push({
-			word: match[0],
-			startCh: wordStart,
-			endCh: wordEnd,
-			startLine: lineNumber,
-			endLine: lineNumber
-		});
-	}
-	
-	return words;
-}
-
-function isInsideFencedCodeBlock(editor: Editor, line: number): boolean {
-	const lineText = editor.getLine(line);
-	
-	// Check if current line starts with ``` (we're on the fence itself)
-	if (lineText.trimStart().startsWith('```')) {
-		return true; // On a fence line, skip corrections
-	}
-	
-	// Check for fenced code block: scan lines above to see if we're inside ```
-	let insideFencedBlock = false;
-	for (let i = 0; i < line; i++) {
-		const checkLine = editor.getLine(i);
-		// Check if line starts with ``` (fenced code block delimiter)
-		if (checkLine.trimStart().startsWith('```')) {
-			insideFencedBlock = !insideFencedBlock;
-		}
-	}
-	
-	return insideFencedBlock;
-}
-
-function isInsideInlineCode(lineText: string, wordStart: number, wordEnd: number): boolean {
-	// Find all inline code spans (text between backticks)
-	const backtickRegex = /`[^`]*`/g;
-	let match;
-	while ((match = backtickRegex.exec(lineText)) !== null) {
-		const codeStart = match.index;
-		const codeEnd = match.index + match[0].length;
-		if (wordStart >= codeStart && wordEnd <= codeEnd) {
-			return true;
-		}
-	}
-	return false;
-}
-
-function isInsideLatexMath(editor: Editor, line: number, charPos: number): boolean {
-	const state = { insideDisplayMath: false, insideInlineMath: false };
-	for (let i = 0; i <= line; i++) {
-		const lineText = editor.getLine(i);
-		const limit = i === line ? charPos : lineText.length;
-		scanLatexMathDelimiters(lineText, limit, state);
-	}
-	return state.insideDisplayMath || state.insideInlineMath;
-}
-
-function scanLatexMathDelimiters(
-	lineText: string,
-	limit: number,
-	state: { insideDisplayMath: boolean; insideInlineMath: boolean }
-): void {
-	let pos = 0;
-	while (pos < limit) {
-		if (lineText.startsWith('$$', pos)) {
-			if (pos + 2 <= limit) {
-				state.insideDisplayMath = !state.insideDisplayMath;
-				pos += 2;
-			} else {
-				break;
-			}
-		} else if (lineText[pos] === '$') {
-			if (!state.insideDisplayMath) {
-				state.insideInlineMath = !state.insideInlineMath;
-			}
-			pos += 1;
-		} else {
-			pos += 1;
-		}
-	}
-}
-
-async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): Promise<string[] | null> {
-	try {
-		// Check if the native spellchecker considers the word misspelled
-		const electron = (window as any).require?.('electron');
-		if (electron) {
-			const webFrame = electron.webFrame || electron.remote?.webFrame;
-			if (webFrame && typeof webFrame.isWordMisspelled === 'function' && typeof webFrame.getWordSuggestions === 'function') {
-				// Check if word is misspelled according to the native spellchecker
-				const isMisspelled = webFrame.isWordMisspelled(word);
-				
-				if (!isMisspelled) {
-					return null;
-				}
-				
-				// Word is misspelled according to native spellchecker
-				// Check if it's in the custom dictionary (which webFrame doesn't always respect correctly)
-				const dictionary = loadCustomDictionary();
-				if (dictionary.has(word)) {
-					return null; // Word is in custom dictionary, don't correct it
-				}
-
-				// Ignore plural forms whose singular variant appears in the dictionary
-				if (shouldIgnoreAsPluralVariant(word, dictionary, plugin)) {
-					return null;
-				}
-				
-				// Check if capitalized word should be ignored because lowercase version is in dictionary
-				// e.g., "Ronit" is ignored if "ronit" is in dictionary, but not vice versa
-				if (plugin.settings.ignoreCapitalizedIfLowercaseInDictionary) {
-					const lowercaseWord = word.toLowerCase();
-					if (word !== lowercaseWord && dictionary.has(lowercaseWord)) {
-						return null; // Lowercase version is in dictionary, ignore this capitalized word
-					}
-				}
-				
-				// Get suggestions
-				let suggestions = webFrame.getWordSuggestions(word);
-				
-				if (suggestions && suggestions.length > 0) {
-					// Filter out single-letter suggestions if setting is enabled
-					if (plugin.settings.ignoreSingleLetterSuggestions) {
-						// Parse exceptions (underscore-separated list of allowed single letters)
-						const exceptions = plugin.settings.singleLetterExceptions
-							.split('_')
-							.filter((s: string) => s.length === 1);
-						
-						suggestions = suggestions.filter((s: string) => {
-							// Keep suggestions that are longer than 1 character
-							if (s.length > 1) return true;
-							// Keep single-letter suggestions that are in the exceptions list
-							return exceptions.includes(s);
-						});
-						
-						// If filtering removed all suggestions, return empty array (not null)
-						// This allows us to distinguish between "not misspelled" and "misspelled but filtered"
-						if (suggestions.length === 0) {
-							return [];
-						}
-					}
-					
-					// Filter out user-specified suggestions to ignore
-					if (plugin.settings.suggestionsToIgnore.trim().length > 0) {
-						// Parse ignored suggestions (underscore-separated list)
-						const ignoredSuggestions = plugin.settings.suggestionsToIgnore
-							.split('_')
-							.filter((s: string) => s.length > 0);
-						
-						suggestions = suggestions.filter((s: string) => 
-							!ignoredSuggestions.includes(s)
-						);
-						
-						// If filtering removed all suggestions, return empty array (not null)
-						if (suggestions.length === 0) {
-							return [];
-						}
-					}
-					
-					// Prioritize user-specified suggestions
-					if (plugin.settings.suggestionsToPrioritize.trim().length > 0) {
-						// Parse prioritized suggestions (underscore-separated list)
-						const prioritizedSuggestions = plugin.settings.suggestionsToPrioritize
-							.split('_')
-							.filter((s: string) => s.length > 0);
-						
-						// Separate suggestions into prioritized and non-prioritized
-						const prioritized: string[] = [];
-						const nonPrioritized: string[] = [];
-						
-						for (const suggestion of suggestions) {
-							if (prioritizedSuggestions.includes(suggestion)) {
-								prioritized.push(suggestion);
-							} else {
-								nonPrioritized.push(suggestion);
-							}
-						}
-						
-						// Sort prioritized suggestions by their order in the priority list
-						prioritized.sort((a, b) => 
-							prioritizedSuggestions.indexOf(a) - prioritizedSuggestions.indexOf(b)
-						);
-						
-						suggestions = prioritized.concat(nonPrioritized);
-					}
-					
-					return suggestions;
-				}
-			}
-		}
-	} catch {
-		// Silently fail if spellchecker is not available
-	}
-	
-	return null;
 }
 
 export function cycleSuggestion(plugin: SpellFixPlugin): void {
 	if (!storedSuggestions) {
-		return; // No suggestions stored, do nothing
+		return;
 	}
-	
+
 	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
 	if (!activeView || !activeView.editor) {
 		return;
 	}
-	
+
 	const editor = activeView.editor;
 	const cursor = editor.getCursor();
 	const { suggestions, position, currentIndex } = storedSuggestions;
-	
-	// Only cycle if cursor is on the same line as the stored suggestion
+
 	if (cursor.line !== position.line) {
 		return;
 	}
-	
-	// Check if there are any suggestions to cycle through
+
 	if (suggestions.length === 0) {
 		new Notice('No suggestions available to cycle');
 		return;
 	}
-	
-	// Read the current word at the stored position to get its actual length
+
 	const currentLine = editor.getLine(position.line);
 	const currentWord = currentLine.substring(position.ch, position.endCh);
-	
-	// If the word at the position doesn't match any suggestion, the position might be stale
-	// In that case, try to find the word by checking if any suggestion matches
 	const actualEndCh = position.ch + currentWord.length;
-	
-	// Cycle to the next suggestion
+
 	const nextIndex = (currentIndex + 1) % suggestions.length;
 	const nextSuggestion = suggestions[nextIndex];
-	
-	// Replace the word with the next suggestion
+
 	editor.replaceRange(
 		nextSuggestion,
 		{ line: position.line, ch: position.ch },
 		{ line: position.line, ch: actualEndCh }
 	);
-	
-	// Update stored suggestions with new index and end position
+
 	storedSuggestions = {
 		originalWord: storedSuggestions.originalWord,
 		suggestions: suggestions,
 		position: {
 			line: position.line,
 			ch: position.ch,
-			endCh: position.ch + nextSuggestion.length
+			endCh: position.ch + nextSuggestion.length,
 		},
-		currentIndex: nextIndex
+		currentIndex: nextIndex,
 	};
 }
 
 export function cycleSuggestionBack(plugin: SpellFixPlugin): void {
 	if (!storedSuggestions) {
-		return; // No suggestions stored, do nothing
+		return;
 	}
-	
+
 	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
 	if (!activeView || !activeView.editor) {
 		return;
 	}
-	
+
 	const editor = activeView.editor;
 	const cursor = editor.getCursor();
 	const { suggestions, position, currentIndex } = storedSuggestions;
-	
-	// Only cycle if cursor is on the same line as the stored suggestion
+
 	if (cursor.line !== position.line) {
 		return;
 	}
-	
-	// Check if there are any suggestions to cycle through
+
 	if (suggestions.length === 0) {
 		new Notice('No suggestions available to cycle');
 		return;
 	}
-	
-	// Read the current word at the stored position to get its actual length
+
 	const currentLine = editor.getLine(position.line);
 	const currentWord = currentLine.substring(position.ch, position.endCh);
-	
-	// If the word at the position doesn't match any suggestion, the position might be stale
-	// In that case, try to find the word by checking if any suggestion matches
 	const actualEndCh = position.ch + currentWord.length;
-	
-	// Cycle to the previous suggestion (with wrap-around)
+
 	const prevIndex = (currentIndex - 1 + suggestions.length) % suggestions.length;
 	const prevSuggestion = suggestions[prevIndex];
-	
-	// Replace the word with the previous suggestion
+
 	editor.replaceRange(
 		prevSuggestion,
 		{ line: position.line, ch: position.ch },
 		{ line: position.line, ch: actualEndCh }
 	);
-	
-	// Update stored suggestions with new index and end position
+
 	storedSuggestions = {
 		originalWord: storedSuggestions.originalWord,
 		suggestions: suggestions,
 		position: {
 			line: position.line,
 			ch: position.ch,
-			endCh: position.ch + prevSuggestion.length
+			endCh: position.ch + prevSuggestion.length,
 		},
-		currentIndex: prevIndex
+		currentIndex: prevIndex,
 	};
 }
 
 export function restoreOriginalWord(plugin: SpellFixPlugin): void {
 	if (!storedSuggestions) {
-		return; // No suggestions stored, do nothing
+		return;
 	}
-	
+
 	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
 	if (!activeView || !activeView.editor) {
 		return;
 	}
-	
+
 	const editor = activeView.editor;
 	const cursor = editor.getCursor();
 	const { originalWord, position } = storedSuggestions;
-	
-	// Only restore if cursor is on the same line as the stored suggestion
+
 	if (cursor.line !== position.line) {
 		return;
 	}
-	
-	// Read the current word at the stored position to get its actual length
+
 	const currentLine = editor.getLine(position.line);
 	const currentWord = currentLine.substring(position.ch, position.endCh);
 	const actualEndCh = position.ch + currentWord.length;
-	
-	// Replace with the original word
+
 	editor.replaceRange(
 		originalWord,
 		{ line: position.line, ch: position.ch },
 		{ line: position.line, ch: actualEndCh }
 	);
-	
-	// Update stored suggestions with original word's end position
+
 	storedSuggestions = {
 		...storedSuggestions,
 		position: {
 			line: position.line,
 			ch: position.ch,
-			endCh: position.ch + originalWord.length
-		}
+			endCh: position.ch + originalWord.length,
+		},
 	};
 }
 
 export async function addLastSuggestionToIgnored(plugin: SpellFixPlugin): Promise<void> {
 	if (!storedSuggestions) {
-		return; // No suggestions stored, do nothing
+		return;
 	}
-	
+
 	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
 	if (!activeView || !activeView.editor) {
 		return;
 	}
-	
+
 	const editor = activeView.editor;
 	const cursor = editor.getCursor();
 	const { suggestions, currentIndex, position, originalWord } = storedSuggestions;
-	
-	// Only work if cursor is on the same line as the stored suggestion
+
 	if (cursor.line !== position.line) {
 		return;
 	}
-	
-	// Get the currently applied suggestion
+
 	const currentSuggestion = suggestions[currentIndex];
-	
-	// Check if it's already in the ignored list
+
 	const currentIgnored = plugin.settings.suggestionsToIgnore
 		.split('_')
 		.filter((s: string) => s.length > 0);
-	
+
 	if (currentIgnored.includes(currentSuggestion)) {
-		// Already ignored, show notice
 		new Notice(`"${currentSuggestion}" is already in ignored suggestions`);
 		return;
 	}
-	
-	// Add to the ignored list and save
+
 	const newIgnoredList = [currentSuggestion].concat(currentIgnored).join('_');
 	plugin.settings.suggestionsToIgnore = newIgnoredList;
 	await plugin.saveSettings();
-	
-	// Remove the current suggestion from the list
+
 	const updatedSuggestions = suggestions.filter((s: string) => s !== currentSuggestion);
-	
-	// Read the current word at the stored position to get its actual length
+
 	const currentLine = editor.getLine(position.line);
 	const currentWord = currentLine.substring(position.ch, position.endCh);
 	const actualEndCh = position.ch + currentWord.length;
-	
+
 	if (updatedSuggestions.length > 0) {
-		// Cycle to the next suggestion (wrap around if we were at the end)
 		const nextIndex = currentIndex >= updatedSuggestions.length ? 0 : currentIndex;
 		const nextSuggestion = updatedSuggestions[nextIndex];
-		
-		// Replace with the next suggestion
+
 		editor.replaceRange(
 			nextSuggestion,
 			{ line: position.line, ch: position.ch },
 			{ line: position.line, ch: actualEndCh }
 		);
-		
-		// Update stored suggestions
+
 		storedSuggestions = {
 			originalWord: originalWord,
 			suggestions: updatedSuggestions,
 			position: {
 				line: position.line,
 				ch: position.ch,
-				endCh: position.ch + nextSuggestion.length
+				endCh: position.ch + nextSuggestion.length,
 			},
-			currentIndex: nextIndex
+			currentIndex: nextIndex,
 		};
-		
+
 		new Notice(`Added "${currentSuggestion}" to ignored suggestions`);
 	} else {
-		// No more suggestions, restore original word
 		editor.replaceRange(
 			originalWord,
 			{ line: position.line, ch: position.ch },
 			{ line: position.line, ch: actualEndCh }
 		);
-		
-		// Update stored suggestions
+
 		storedSuggestions = {
 			originalWord: originalWord,
 			suggestions: updatedSuggestions,
 			position: {
 				line: position.line,
 				ch: position.ch,
-				endCh: position.ch + originalWord.length
+				endCh: position.ch + originalWord.length,
 			},
-			currentIndex: 0
+			currentIndex: 0,
 		};
-		
+
 		new Notice(`Added "${currentSuggestion}" to ignored suggestions (no more suggestions, restored original word)`);
 	}
 }
@@ -718,89 +404,68 @@ export async function autocorrectLastWord(plugin: SpellFixPlugin): Promise<void>
 
 	const editor = activeView.editor;
 	const cursor = editor.getCursor();
-	
-	// Get the current line text
+
 	const currentLine = cursor.line;
 	const lineText = editor.getLine(currentLine);
-	
-	// Check if we're inside a fenced code block (if setting is enabled)
+
 	if (plugin.settings.skipCodeBlocks) {
 		if (isInsideFencedCodeBlock(editor, currentLine)) {
 			return;
 		}
 	}
-	
-	// Get cursor position within the line (should be right after the space)
+
 	const cursorOffset = cursor.ch;
-	
-	// Find the last word by scanning backwards from cursor (before the space)
-	let pos = cursorOffset - 1; // Start before the space
-	
-	// Skip any whitespace before cursor
+
+	let pos = cursorOffset - 1;
+
 	while (pos >= 0 && /\s/.test(lineText[pos])) {
 		pos--;
 	}
-	
-	// If we're at the beginning or only found whitespace, nothing to check
+
 	if (pos < 0) {
 		return;
 	}
-	
-	// Skip any non-letter characters (like ), ], -, etc.) to find the actual end of the word
+
 	while (pos >= 0 && !/\p{L}/u.test(lineText[pos])) {
 		pos--;
 	}
-	
-	// If we didn't find any letters, nothing to check
+
 	if (pos < 0) {
 		return;
 	}
-	
+
 	const wordEnd = pos + 1;
-	
-	// Scan backwards to find the start of the word
+
 	let wordStart = pos;
 	while (wordStart > 0 && /\p{L}/u.test(lineText[wordStart - 1])) {
 		wordStart--;
 	}
-	
-	// Check if the word is inside inline code (if setting is enabled)
+
 	if (plugin.settings.skipCodeBlocks) {
 		if (isInsideInlineCode(lineText, wordStart, wordEnd)) {
 			return;
 		}
 	}
 
-	// Check if the word is inside LaTeX math ($...$ or $$...$$) if setting is enabled
 	if (plugin.settings.skipLatexMath) {
 		if (isInsideLatexMath(editor, currentLine, wordStart)) {
 			return;
 		}
 	}
-	
-	// Extract the word
+
 	const wordText = lineText.substring(wordStart, wordEnd);
-	
-	// Skip very short words or words with numbers
-	if (wordText.length < 2 || /\d/.test(wordText)) {
+
+	if (isWordTooShortToCheck(wordText)) {
 		return;
 	}
-	
-	// Check if this word is misspelled and get all suggestions
+
 	const suggestions = await getAllSuggestionsForWord(wordText, plugin);
-	
-	// Handle different cases:
-	// null = word not misspelled or in dictionary
-	// [] = word misspelled but all suggestions filtered out
-	// [suggestions] = word misspelled with valid suggestions
-	
+
 	if (suggestions !== null && suggestions.length === 0) {
-		// Found a misspelled word but all suggestions were filtered out
 		new Notice(`No valid suggestions for "${wordText}"`);
 		return;
 	}
-	
-	// If we got suggestions, the word is misspelled - replace it with the first suggestion
+
 	if (suggestions && suggestions.length > 0) {
 		const firstSuggestion = suggestions[0];
 		editor.replaceRange(
@@ -808,23 +473,18 @@ export async function autocorrectLastWord(plugin: SpellFixPlugin): Promise<void>
 			{ line: currentLine, ch: wordStart },
 			{ line: currentLine, ch: wordEnd }
 		);
-		
-		// Store all suggestions and original word for cycling with Alt+C and restoring with Alt+R
+
 		storedSuggestions = {
 			originalWord: wordText,
 			suggestions: suggestions,
 			position: {
 				line: currentLine,
 				ch: wordStart,
-				endCh: wordStart + firstSuggestion.length
+				endCh: wordStart + firstSuggestion.length,
 			},
-			currentIndex: 0
+			currentIndex: 0,
 		};
-		
-		// Move cursor to after the space (which is after the corrected word and any punctuation)
-		// cursorOffset is the position after the space
-		// wordEnd is the position after the last letter of the word
-		// The difference is the number of characters (punctuation + space) after the word
+
 		const charsAfterWord = cursorOffset - wordEnd;
 		editor.setCursor({ line: currentLine, ch: wordStart + firstSuggestion.length + charsAfterWord });
 	}

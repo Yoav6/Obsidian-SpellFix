@@ -42,6 +42,9 @@ export default class SpellFixPlugin extends Plugin {
 		});
 	}
 
+	/** Invoked by E2E tests when keyboard simulation is unavailable. */
+	triggerAutocorrect = (): Promise<void> => autocorrectLastWord(this);
+
 	async loadSettings() {
 		this.settings = Object.assign(
 			{},

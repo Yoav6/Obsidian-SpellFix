@@ -16,7 +16,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Ignore single-letter suggestions')
-			.setDesc('Filter out single-character spelling suggestions. Helps prevent incorrect replacements, especially with non-Latin scripts.')
+			.setDesc('Filter out single-character spelling suggestions. Helps prevent incorrect replacements, especially with non-latin scripts.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.ignoreSingleLetterSuggestions)
 				.onChange(async (value) => {
@@ -26,9 +26,9 @@ export class SpellFixSettingTab extends PluginSettingTab {
 				}));
 
 		if (this.plugin.settings.ignoreSingleLetterSuggestions) {
-		new Setting(containerEl)
+			new Setting(containerEl)
 			.setName('Single-letter exceptions')
-			.setDesc('Single letters that should NOT be filtered (underscore-separated). Example: "I_a" will keep "I" and "a" as valid suggestions.')
+			.setDesc('Single letters that should not be filtered (underscore-separated). Example: "I_a" will keep "i" and "a" as valid suggestions.')
 			.addText(text => text
 				.setPlaceholder('I_a')
 				.setValue(this.plugin.settings.singleLetterExceptions)
@@ -40,9 +40,9 @@ export class SpellFixSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Suggestions to ignore')
-			.setDesc('Specific suggestions that should never be used (underscore-separated). Example: "ht_Th" will filter out these suggestions.')
+			.setDesc('Specific suggestions that should never be used (underscore-separated). Example: "ht_th" will filter out these suggestions.')
 			.addText(text => text
-				.setPlaceholder('ht_Th')
+				.setPlaceholder('Ht_th')
 				.setValue(this.plugin.settings.suggestionsToIgnore)
 				.onChange(async (value) => {
 					this.plugin.settings.suggestionsToIgnore = value;
@@ -53,7 +53,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 			.setName('Suggestions to prioritize')
 			.setDesc('Suggestions that should be moved to the front of the list (underscore-separated). Example: "the_of_and" will prioritize common words.')
 			.addText(text => text
-				.setPlaceholder('the_of_and_a_to_is_that_it')
+				.setPlaceholder('The_of_and_a_to_is_that_it')
 				.setValue(this.plugin.settings.suggestionsToPrioritize)
 				.onChange(async (value) => {
 					this.plugin.settings.suggestionsToPrioritize = value;
@@ -102,7 +102,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Ignore capitalized words that appear uncapitalized in dictionary')
-			.setDesc('When enabled, capitalized words (e.g., "Taggable") will be ignored if their lowercase version (e.g., "taggable") is in the dictionary, but not vice versa.')
+			.setDesc('When enabled, capitalized words (e.g., "taggable") will be ignored if their lowercase version (e.g., "taggable") is in the dictionary, but not vice versa.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.ignoreCapitalizedIfLowercaseInDictionary)
 				.onChange(async (value) => {
@@ -112,7 +112,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Ignore plural words that appear singular in dictionary')
-			.setDesc('When enabled, words ending with \"s\" are ignored if their singular form (without the \"s\") appears in the dictionary.')
+			.setDesc('When enabled, words ending with "s" are ignored if their singular form (without the "s") appears in the dictionary.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.ignorePluralIfSingularInDictionary)
 				.onChange(async (value) => {
