@@ -15,7 +15,7 @@ export default class SpellFixPlugin extends Plugin {
 		this.addSettingTab(new SpellFixSettingTab(this.app, this));
 		
 		// Register keyboard event for autocorrect
-		this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
+		this.registerDomEvent(activeDocument, 'keydown', (evt: KeyboardEvent) => {
 			// Only handle space key
 			if (evt.key !== ' ') {
 				return;

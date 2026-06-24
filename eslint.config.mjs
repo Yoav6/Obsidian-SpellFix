@@ -32,10 +32,4 @@ export default [
 			},
 		},
 	},
-	{
-		files: ["main.ts"],
-		rules: {
-			"obsidianmd/prefer-active-doc": "off",
-		},
-	},
 ];
