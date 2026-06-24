@@ -14,7 +14,10 @@
 |---------|--------------|
 | `npm run check` | build + lint + unit tests |
 | `npm run test:unit` | unit tests only |
+| `npm run test:unit:file -- <path>` | one unit test file (or `-t "name"` to match tests) |
+| `npm run test:unit:watch` | unit tests in watch mode; pass a file after `--` to scope |
 | `npm run test:e2e` | E2E tests with other community plugins disabled (Obsidian must be running) |
+| `npm run test:e2e:file -- <path>` | one E2E file (or add `-t "name"` after `--`) |
 | `npm run test:e2e:all-plugins` | E2E with all community plugins left enabled (conflict check before release) |
 | `npm run test:all` | check + isolated E2E |
 | `npm run test:release` | check + E2E with all plugins enabled |
@@ -52,6 +55,66 @@ On **Flatpak** installs, `~/.local/bin/obsidian` is often a broken symlink. E2E 
 - Plugin lives at `.obsidian/plugins/SpellFix/` inside Plugin Development Vault
 - Run `npm run build` (or `npm run dev`) before E2E so Obsidian loads the latest `main.js`
 - E2E tests reset plugin settings to defaults before each test (your local `data.json` is not used during E2E)
+
+### Running a single test
+
+During development, run only the tests for the feature you changed instead of the full suite.
+
+**Typical agent loop:**
+
+1. Change logic in `src/utils/` → run the matching unit file
+2. Change a command or setting → run the matching E2E file (Obsidian open, `npm run build` first)
+3. Before commit → `npm run check`
+4. Before release → `npm run test:release`
+
+**Unit — one file:**
+
+```bash
+npm run test:unit:file -- tests/unit/spelling-rules.test.ts
+```
+
+**Unit — match test names** (substring regex):
+
+```bash
+npm run test:unit:file -- -t "plural"
+npm run test:unit:file -- tests/unit/code-detection.test.ts -t "fenced"
+```
+
+**Unit — watch while editing:**
+
+```bash
+npm run test:unit:watch -- tests/unit/suggestion-filter.test.ts
+```
+
+**E2E — one file:**
+
+```bash
+npm run test:e2e:file -- tests/e2e/autocorrect.test.ts
+npm run test:e2e:file -- tests/e2e/commands.test.ts
+```
+
+**E2E — one test by name:**
+
+```bash
+npm run test:e2e:file -- tests/e2e/commands.test.ts -t "fix previous spelling"
+npm run test:e2e:file -- -t "skipCodeBlocks on"
+```
+
+Plugin isolation and the completion notice still run for partial E2E invocations (global setup/teardown applies to any `test:e2e:*` run).
+
+**Feature → test file quick reference:**
+
+| Feature | Unit file | E2E file |
+|---------|-----------|----------|
+| Spelling rules (plural, caps, short words) | `tests/unit/spelling-rules.test.ts` | — |
+| Suggestion filter / ignore / prioritize | `tests/unit/suggestion-filter.test.ts` | — |
+| Code / math skip regions | `tests/unit/code-detection.test.ts` | `tests/e2e/settings.test.ts` |
+| Word extraction | `tests/unit/word-extraction.test.ts` | — |
+| Dictionary parsing | `tests/unit/dictionary.test.ts` | — |
+| Fix / cycle / restore / ignore commands | — | `tests/e2e/commands.test.ts` |
+| Autocorrect on space | — | `tests/e2e/autocorrect.test.ts` |
+| Settings persistence / toggle | — | `tests/e2e/settings.test.ts` |
+| Plugin load / command registration | — | `tests/e2e/smoke.test.ts` |
 
 ## Feature coverage map
 

@@ -246,7 +246,11 @@ this.registerInterval(window.setInterval(() => { /* ... */ }, 1000));
 ## Testing
 
 - After code changes, always run `npm run check`
-- For E2E during development, run `npm run test:e2e` (disables other community plugins except BRAT, Hot Reload, and SpellFix)
+- **During development**, prefer targeted tests over the full suite — see [TESTING.md](TESTING.md#running-a-single-test):
+  - Utils / pure logic: `npm run test:unit:file -- tests/unit/<module>.test.ts`
+  - Commands / Obsidian behavior: `npm run test:e2e:file -- tests/e2e/<area>.test.ts` (Obsidian open, `npm run build` first)
+  - Narrow further with `-t "test name substring"` after `--`
+- For full isolated E2E, run `npm run test:e2e` (disables other community plugins except BRAT, Hot Reload, and SpellFix)
 - Before releases, run `npm run test:release` to include a full-plugin-stack conflict check (Obsidian must be open on Plugin Development Vault)
 - Put testable logic in pure functions under `src/utils/` — do not add new pure logic to `src/commands/fix-previous-spelling.ts`
 - Unit tests go in `tests/unit/`; E2E tests in `tests/e2e/`
