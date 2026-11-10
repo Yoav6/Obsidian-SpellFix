@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting, type SettingDefinitionItem } from 'obsidian';
 import type SpellFixPlugin from '../main';
 
 export class SpellFixSettingTab extends PluginSettingTab {
@@ -10,7 +10,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 	}
 
 	// Obsidian 1.13.0+: declarative settings (display() is skipped).
-	getSettingDefinitions() {
+	getSettingDefinitions(): SettingDefinitionItem[] {
 		return [
 			{
 				name: 'Ignore single-letter suggestions',
@@ -67,7 +67,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 			},
 			{
 				name: 'Ignore capitalized words that appear uncapitalized in dictionary',
-				desc: 'When enabled, capitalized words (e.g., "taggable") will be ignored if their lowercase version (e.g., "taggable") is in the dictionary, but not vice versa.',
+				desc: 'When enabled, capitalized words will be ignored if their lowercase version is in the dictionary, but not vice versa.',
 				control: { type: 'toggle', key: 'ignoreCapitalizedIfLowercaseInDictionary' },
 			},
 			{
@@ -80,6 +80,10 @@ export class SpellFixSettingTab extends PluginSettingTab {
 
 	// Obsidian < 1.13.0: imperative settings fallback.
 	display(): void {
+		this.renderLegacySettings();
+	}
+
+	private renderLegacySettings(): void {
 		const { containerEl } = this;
 
 		containerEl.empty();
@@ -92,7 +96,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.ignoreSingleLetterSuggestions = value;
 					await this.plugin.saveSettings();
-					this.display(); // Refresh to show/hide exceptions setting
+					this.renderLegacySettings(); // Refresh to show/hide exceptions setting
 				}));
 
 		if (this.plugin.settings.ignoreSingleLetterSuggestions) {
@@ -172,7 +176,7 @@ export class SpellFixSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Ignore capitalized words that appear uncapitalized in dictionary')
-			.setDesc('When enabled, capitalized words (e.g., "taggable") will be ignored if their lowercase version (e.g., "taggable") is in the dictionary, but not vice versa.')
+			.setDesc('When enabled, capitalized words will be ignored if their lowercase version is in the dictionary, but not vice versa.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.ignoreCapitalizedIfLowercaseInDictionary)
 				.onChange(async (value) => {

@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-spellfix",
-	"version": "1.0.0",
+	"version": "1.1.2",
 	"description": "Adds a shortcut to accept spellchecker suggestions",
 	"main": "main.js",
 	"scripts": {
@@ -14,8 +14,10 @@
 		"test:unit:file": "vitest run",
 		"test:e2e": "vp test run --config vitest.e2e.config.ts",
 		"test:e2e:file": "vp test run --config vitest.e2e.config.ts",
+		"test:e2e:dev": "E2E_SKIP_PLUGIN_ISOLATION=1 vp test run --config vitest.e2e.config.ts",
 		"test:e2e:all-plugins": "E2E_SKIP_PLUGIN_ISOLATION=1 vp test run --config vitest.e2e.config.ts",
 		"check": "npm run build && npm run lint && npm run test:unit",
+		"check:quick": "tsc -noEmit -skipLibCheck && npm run lint",
 		"test:all": "npm run check && npm run test:e2e",
 		"test:release": "npm run check && npm run test:e2e:all-plugins",
 		"prepare": "husky"
@@ -33,6 +35,8 @@
 	"license": "MIT",
 	"type": "module",
 	"devDependencies": {
+		"@codemirror/state": "6.7.6",
+		"@codemirror/view": "6.43.13",
 		"@types/node": "^20.19.43",
 		"@typescript-eslint/parser": "^8.62.0",
 		"@voidzero-dev/vite-plus-linux-x64-gnu": "^0.1.24",
@@ -40,7 +44,7 @@
 		"eslint": "^9.39.4",
 		"eslint-plugin-obsidianmd": "^0.3.0",
 		"husky": "^9.1.7",
-		"obsidian": "latest",
+		"obsidian": "^1.14.4",
 		"obsidian-e2e": "^0.6.0",
 		"tslib": "2.4.0",
 		"typescript": "^6.0.3",

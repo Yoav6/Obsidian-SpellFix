@@ -6,19 +6,32 @@ import {
 	isInsideInlineCode,
 	isInsideLatexMathFromLines,
 } from '../utils/code-detection';
+import { isInsideFrontmatterFromLines, isInsideNonProse } from '../utils/non-prose';
+import { isReplacementInPlace, type ReplacementPosition } from '../utils/replacement-state';
 import { applySuggestionFilters } from '../utils/suggestion-filter';
 import {
 	isWordTooShortToCheck,
 	shouldIgnoreAsPluralVariant,
 	shouldIgnoreCapitalizedVariant,
 } from '../utils/spelling-rules';
-import { extractWordsFromLine, type Word } from '../utils/word-extraction';
+import { extractWordsFromLine, findWordBeforeCursor, type Word } from '../utils/word-extraction';
 
 interface StoredSuggestions {
+	filePath: string | null;
 	originalWord: string;
 	suggestions: string[];
-	position: { line: number; ch: number; endCh: number };
+	position: ReplacementPosition;
 	currentIndex: number;
+	currentText: string;
+}
+
+interface EditorTarget {
+	editor: Editor;
+	filePath: string | null;
+}
+
+interface CurrentReplacement extends EditorTarget {
+	stored: StoredSuggestions;
 }
 
 interface SpellcheckerApi {
@@ -52,8 +65,20 @@ function getSpellcheckerApi(): SpellcheckerApi | null {
 	return null;
 }
 
-function isInsideFencedCodeBlock(editor: Editor, line: number): boolean {
-	return isInsideFencedCodeBlockFromLines((i) => editor.getLine(i), line);
+function getActiveTarget(plugin: SpellFixPlugin): EditorTarget | null {
+	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+	if (!activeView || !activeView.editor) {
+		return null;
+	}
+	return { editor: activeView.editor, filePath: activeView.file?.path ?? null };
+}
+
+function isLineExcluded(editor: Editor, line: number, plugin: SpellFixPlugin): boolean {
+	const getLine = (i: number) => editor.getLine(i);
+	if (isInsideFrontmatterFromLines(getLine, editor.lineCount(), line)) {
+		return true;
+	}
+	return plugin.settings.skipCodeBlocks && isInsideFencedCodeBlockFromLines(getLine, line);
 }
 
 function isInsideLatexMath(editor: Editor, line: number, charPos: number): boolean {
@@ -110,15 +135,19 @@ async function getAllSuggestionsForWord(word: string, plugin: SpellFixPlugin): P
 }
 
 export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void> {
-	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-	if (!activeView || !activeView.editor) {
+	const target = getActiveTarget(plugin);
+	if (!target) {
 		return;
 	}
 
-	const editor = activeView.editor;
+	const { editor } = target;
 	const cursor = editor.getCursor();
 
 	const currentLine = cursor.line;
+	if (isLineExcluded(editor, currentLine, plugin)) {
+		return;
+	}
+
 	const lineText = editor.getLine(currentLine);
 
 	let cursorOffset = cursor.ch;
@@ -165,6 +194,7 @@ export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void>
 			);
 
 			storedSuggestions = {
+				filePath: target.filePath,
 				originalWord: word.word,
 				suggestions: suggestions,
 				position: {
@@ -173,164 +203,90 @@ export async function fixPreviousSpelling(plugin: SpellFixPlugin): Promise<void>
 					endCh: word.startCh + firstSuggestion.length,
 				},
 				currentIndex: 0,
+				currentText: firstSuggestion,
 			};
 			return;
 		}
 	}
 }
 
-export function cycleSuggestion(plugin: SpellFixPlugin): void {
-	if (!storedSuggestions) {
+function getCurrentReplacement(plugin: SpellFixPlugin): CurrentReplacement | null {
+	const target = getActiveTarget(plugin);
+	if (!storedSuggestions || !target || target.filePath !== storedSuggestions.filePath) {
+		return null;
+	}
+
+	const { position, currentText } = storedSuggestions;
+	const { editor } = target;
+	if (editor.getCursor().line !== position.line || position.line >= editor.lineCount()) {
+		return null;
+	}
+
+	if (!isReplacementInPlace(editor.getLine(position.line), position, currentText)) {
+		return null;
+	}
+
+	return { ...target, stored: storedSuggestions };
+}
+
+function replaceCurrentText(
+	{ editor, stored }: CurrentReplacement,
+	text: string,
+	update: Partial<Pick<StoredSuggestions, 'suggestions' | 'currentIndex'>> = {}
+): void {
+	const { position } = stored;
+	editor.replaceRange(
+		text,
+		{ line: position.line, ch: position.ch },
+		{ line: position.line, ch: position.endCh }
+	);
+
+	storedSuggestions = {
+		...stored,
+		...update,
+		position: { ...position, endCh: position.ch + text.length },
+		currentText: text,
+	};
+}
+
+function stepSuggestion(plugin: SpellFixPlugin, step: 1 | -1): void {
+	const current = getCurrentReplacement(plugin);
+	if (!current) {
 		return;
 	}
 
-	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-	if (!activeView || !activeView.editor) {
-		return;
-	}
-
-	const editor = activeView.editor;
-	const cursor = editor.getCursor();
-	const { suggestions, position, currentIndex } = storedSuggestions;
-
-	if (cursor.line !== position.line) {
-		return;
-	}
-
+	const { suggestions, currentIndex } = current.stored;
 	if (suggestions.length === 0) {
 		new Notice('No suggestions available to cycle');
 		return;
 	}
 
-	const currentLine = editor.getLine(position.line);
-	const currentWord = currentLine.substring(position.ch, position.endCh);
-	const actualEndCh = position.ch + currentWord.length;
+	const nextIndex = (currentIndex + step + suggestions.length) % suggestions.length;
+	replaceCurrentText(current, suggestions[nextIndex], { currentIndex: nextIndex });
+}
 
-	const nextIndex = (currentIndex + 1) % suggestions.length;
-	const nextSuggestion = suggestions[nextIndex];
-
-	editor.replaceRange(
-		nextSuggestion,
-		{ line: position.line, ch: position.ch },
-		{ line: position.line, ch: actualEndCh }
-	);
-
-	storedSuggestions = {
-		originalWord: storedSuggestions.originalWord,
-		suggestions: suggestions,
-		position: {
-			line: position.line,
-			ch: position.ch,
-			endCh: position.ch + nextSuggestion.length,
-		},
-		currentIndex: nextIndex,
-	};
+export function cycleSuggestion(plugin: SpellFixPlugin): void {
+	stepSuggestion(plugin, 1);
 }
 
 export function cycleSuggestionBack(plugin: SpellFixPlugin): void {
-	if (!storedSuggestions) {
-		return;
-	}
-
-	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-	if (!activeView || !activeView.editor) {
-		return;
-	}
-
-	const editor = activeView.editor;
-	const cursor = editor.getCursor();
-	const { suggestions, position, currentIndex } = storedSuggestions;
-
-	if (cursor.line !== position.line) {
-		return;
-	}
-
-	if (suggestions.length === 0) {
-		new Notice('No suggestions available to cycle');
-		return;
-	}
-
-	const currentLine = editor.getLine(position.line);
-	const currentWord = currentLine.substring(position.ch, position.endCh);
-	const actualEndCh = position.ch + currentWord.length;
-
-	const prevIndex = (currentIndex - 1 + suggestions.length) % suggestions.length;
-	const prevSuggestion = suggestions[prevIndex];
-
-	editor.replaceRange(
-		prevSuggestion,
-		{ line: position.line, ch: position.ch },
-		{ line: position.line, ch: actualEndCh }
-	);
-
-	storedSuggestions = {
-		originalWord: storedSuggestions.originalWord,
-		suggestions: suggestions,
-		position: {
-			line: position.line,
-			ch: position.ch,
-			endCh: position.ch + prevSuggestion.length,
-		},
-		currentIndex: prevIndex,
-	};
+	stepSuggestion(plugin, -1);
 }
 
 export function restoreOriginalWord(plugin: SpellFixPlugin): void {
-	if (!storedSuggestions) {
-		return;
+	const current = getCurrentReplacement(plugin);
+	if (current) {
+		replaceCurrentText(current, current.stored.originalWord);
 	}
-
-	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-	if (!activeView || !activeView.editor) {
-		return;
-	}
-
-	const editor = activeView.editor;
-	const cursor = editor.getCursor();
-	const { originalWord, position } = storedSuggestions;
-
-	if (cursor.line !== position.line) {
-		return;
-	}
-
-	const currentLine = editor.getLine(position.line);
-	const currentWord = currentLine.substring(position.ch, position.endCh);
-	const actualEndCh = position.ch + currentWord.length;
-
-	editor.replaceRange(
-		originalWord,
-		{ line: position.line, ch: position.ch },
-		{ line: position.line, ch: actualEndCh }
-	);
-
-	storedSuggestions = {
-		...storedSuggestions,
-		position: {
-			line: position.line,
-			ch: position.ch,
-			endCh: position.ch + originalWord.length,
-		},
-	};
 }
 
 export async function addLastSuggestionToIgnored(plugin: SpellFixPlugin): Promise<void> {
-	if (!storedSuggestions) {
+	const current = getCurrentReplacement(plugin);
+	if (!current) {
 		return;
 	}
 
-	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-	if (!activeView || !activeView.editor) {
-		return;
-	}
-
-	const editor = activeView.editor;
-	const cursor = editor.getCursor();
-	const { suggestions, currentIndex, position, originalWord } = storedSuggestions;
-
-	if (cursor.line !== position.line) {
-		return;
-	}
-
+	const { suggestions, currentIndex, originalWord } = current.stored;
 	const currentSuggestion = suggestions[currentIndex];
 
 	const currentIgnored = plugin.settings.suggestionsToIgnore
@@ -342,150 +298,89 @@ export async function addLastSuggestionToIgnored(plugin: SpellFixPlugin): Promis
 		return;
 	}
 
-	const newIgnoredList = [currentSuggestion].concat(currentIgnored).join('_');
-	plugin.settings.suggestionsToIgnore = newIgnoredList;
+	plugin.settings.suggestionsToIgnore = [currentSuggestion].concat(currentIgnored).join('_');
 	await plugin.saveSettings();
 
 	const updatedSuggestions = suggestions.filter((s: string) => s !== currentSuggestion);
 
-	const currentLine = editor.getLine(position.line);
-	const currentWord = currentLine.substring(position.ch, position.endCh);
-	const actualEndCh = position.ch + currentWord.length;
-
 	if (updatedSuggestions.length > 0) {
 		const nextIndex = currentIndex >= updatedSuggestions.length ? 0 : currentIndex;
-		const nextSuggestion = updatedSuggestions[nextIndex];
-
-		editor.replaceRange(
-			nextSuggestion,
-			{ line: position.line, ch: position.ch },
-			{ line: position.line, ch: actualEndCh }
-		);
-
-		storedSuggestions = {
-			originalWord: originalWord,
+		replaceCurrentText(current, updatedSuggestions[nextIndex], {
 			suggestions: updatedSuggestions,
-			position: {
-				line: position.line,
-				ch: position.ch,
-				endCh: position.ch + nextSuggestion.length,
-			},
 			currentIndex: nextIndex,
-		};
-
+		});
 		new Notice(`Added "${currentSuggestion}" to ignored suggestions`);
 	} else {
-		editor.replaceRange(
-			originalWord,
-			{ line: position.line, ch: position.ch },
-			{ line: position.line, ch: actualEndCh }
-		);
-
-		storedSuggestions = {
-			originalWord: originalWord,
+		replaceCurrentText(current, originalWord, {
 			suggestions: updatedSuggestions,
-			position: {
-				line: position.line,
-				ch: position.ch,
-				endCh: position.ch + originalWord.length,
-			},
 			currentIndex: 0,
-		};
-
+		});
 		new Notice(`Added "${currentSuggestion}" to ignored suggestions (no more suggestions, restored original word)`);
 	}
 }
 
-export async function autocorrectLastWord(plugin: SpellFixPlugin): Promise<void> {
-	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-	if (!activeView || !activeView.editor) {
+export async function autocorrectLastWord(
+	plugin: SpellFixPlugin,
+	target: EditorTarget | null = getActiveTarget(plugin)
+): Promise<void> {
+	if (!target) {
 		return;
 	}
 
-	const editor = activeView.editor;
+	const { editor } = target;
 	const cursor = editor.getCursor();
-
 	const currentLine = cursor.line;
+
+	if (isLineExcluded(editor, currentLine, plugin)) {
+		return;
+	}
+
 	const lineText = editor.getLine(currentLine);
-
-	if (plugin.settings.skipCodeBlocks) {
-		if (isInsideFencedCodeBlock(editor, currentLine)) {
-			return;
-		}
-	}
-
-	const cursorOffset = cursor.ch;
-
-	let pos = cursorOffset - 1;
-
-	while (pos >= 0 && /\s/.test(lineText[pos])) {
-		pos--;
-	}
-
-	if (pos < 0) {
+	const found = findWordBeforeCursor(lineText, cursor.ch);
+	if (!found) {
 		return;
 	}
 
-	while (pos >= 0 && !/\p{L}/u.test(lineText[pos])) {
-		pos--;
-	}
+	const { word, start, end } = found;
 
-	if (pos < 0) {
+	if (isInsideNonProse(lineText, start, end)) {
 		return;
 	}
 
-	const wordEnd = pos + 1;
-
-	let wordStart = pos;
-	while (wordStart > 0 && /\p{L}/u.test(lineText[wordStart - 1])) {
-		wordStart--;
-	}
-
-	if (plugin.settings.skipCodeBlocks) {
-		if (isInsideInlineCode(lineText, wordStart, wordEnd)) {
-			return;
-		}
-	}
-
-	if (plugin.settings.skipLatexMath) {
-		if (isInsideLatexMath(editor, currentLine, wordStart)) {
-			return;
-		}
-	}
-
-	const wordText = lineText.substring(wordStart, wordEnd);
-
-	if (isWordTooShortToCheck(wordText)) {
+	if (plugin.settings.skipCodeBlocks && isInsideInlineCode(lineText, start, end)) {
 		return;
 	}
 
-	const suggestions = await getAllSuggestionsForWord(wordText, plugin);
-
-	if (suggestions !== null && suggestions.length === 0) {
-		new Notice(`No valid suggestions for "${wordText}"`);
+	if (plugin.settings.skipLatexMath && isInsideLatexMath(editor, currentLine, start)) {
 		return;
 	}
 
-	if (suggestions && suggestions.length > 0) {
-		const firstSuggestion = suggestions[0];
-		editor.replaceRange(
-			firstSuggestion,
-			{ line: currentLine, ch: wordStart },
-			{ line: currentLine, ch: wordEnd }
-		);
-
-		storedSuggestions = {
-			originalWord: wordText,
-			suggestions: suggestions,
-			position: {
-				line: currentLine,
-				ch: wordStart,
-				endCh: wordStart + firstSuggestion.length,
-			},
-			currentIndex: 0,
-		};
-
-		const charsAfterWord = cursorOffset - wordEnd;
-		editor.setCursor({ line: currentLine, ch: wordStart + firstSuggestion.length + charsAfterWord });
+	if (isWordTooShortToCheck(word)) {
+		return;
 	}
+
+	const suggestions = await getAllSuggestionsForWord(word, plugin);
+	if (!suggestions || suggestions.length === 0) {
+		return;
+	}
+
+	const firstSuggestion = suggestions[0];
+	editor.replaceRange(
+		firstSuggestion,
+		{ line: currentLine, ch: start },
+		{ line: currentLine, ch: end }
+	);
+
+	storedSuggestions = {
+		filePath: target.filePath,
+		originalWord: word,
+		suggestions: suggestions,
+		position: {
+			line: currentLine,
+			ch: start,
+			endCh: start + firstSuggestion.length,
+		},
+		currentIndex: 0,
+		currentText: firstSuggestion,
+	};
 }

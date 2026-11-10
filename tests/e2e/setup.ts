@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS } from "../../src/settings";
 import { resolveObsidianBin } from "./resolve-obsidian-bin";
 
 export const pluginTestOptions = {
@@ -7,4 +8,5 @@ export const pluginTestOptions = {
 	sharedVaultLock: true,
 	sandboxRoot: "__obsidian_e2e__",
 	timeoutMs: 15_000,
+	seedPluginData: DEFAULT_SETTINGS,
 } as const;

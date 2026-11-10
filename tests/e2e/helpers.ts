@@ -1,4 +1,16 @@
 import type { ObsidianClient } from "obsidian-e2e";
+import type { SandboxApi } from "obsidian-e2e";
+
+/** Reused note filename inside each per-test sandbox directory. */
+export const TEST_NOTE = "note.md";
+
+export async function writeTestNote(
+	sandbox: SandboxApi,
+	body: string
+): Promise<string> {
+	await sandbox.writeNote({ path: TEST_NOTE, body });
+	return sandbox.path(TEST_NOTE);
+}
 
 export async function openNoteAtCursor(
 	obsidian: ObsidianClient,
@@ -15,7 +27,6 @@ export async function openNoteAtCursor(
 			leaf.view.editor.setCursor(${JSON.stringify(cursor)});
 		})()
 	`);
-	await obsidian.sleep(300);
 }
 
 export async function readPluginSettings(
@@ -43,6 +54,22 @@ export async function triggerAutocorrect(obsidian: ObsidianClient): Promise<void
 	`);
 }
 
-export async function sleep(obsidian: ObsidianClient, ms: number): Promise<void> {
-	await obsidian.sleep(ms);
+/** Sends real key events, so the text arrives the same way as typing does. */
+export async function typeIntoEditor(obsidian: ObsidianClient, text: string): Promise<void> {
+	await obsidian.dev.eval(`
+		(async () => {
+			const leaf = app.workspace.activeLeaf;
+			if (!leaf || !('editor' in leaf.view)) return;
+			leaf.view.editor.focus();
+			const webContents = window.require('electron').remote.getCurrentWebContents();
+			webContents.focus();
+			for (const char of ${JSON.stringify(text)}) {
+				const keyCode = char === ' ' ? 'Space' : char;
+				webContents.sendInputEvent({ type: 'keyDown', keyCode });
+				webContents.sendInputEvent({ type: 'char', keyCode: char });
+				webContents.sendInputEvent({ type: 'keyUp', keyCode });
+				await new Promise((resolve) => setTimeout(resolve, 30));
+			}
+		})()
+	`);
 }

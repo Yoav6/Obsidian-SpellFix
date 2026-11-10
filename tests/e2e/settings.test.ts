@@ -2,8 +2,8 @@ import { expect } from "vite-plus/test";
 import { createPluginTest } from "obsidian-e2e/vitest";
 import "obsidian-e2e/matchers";
 import { pluginTestOptions } from "./setup";
-import { openNoteAtCursor, readPluginSettings, sleep } from "./helpers";
-import { patchPluginSettings, resetPluginSettings } from "./reset-settings";
+import { openNoteAtCursor, readPluginSettings, writeTestNote } from "./helpers";
+import { applyPluginSettings, resetPluginSettings, waitForPluginSetting } from "./reset-settings";
 
 const test = createPluginTest(pluginTestOptions);
 
@@ -12,10 +12,9 @@ test.beforeEach(async ({ obsidian }) => {
 });
 
 test("skipCodeBlocks off allows correction inside inline code", async ({ obsidian, sandbox }) => {
-	await patchPluginSettings(obsidian, { skipCodeBlocks: false });
+	await applyPluginSettings(obsidian, { skipCodeBlocks: false });
 
-	const notePath = sandbox.path("spellfix-inline-code.md");
-	await sandbox.writeNote({ path: "spellfix-inline-code.md", body: "`teh`" });
+	const notePath = await writeTestNote(sandbox, "`teh`");
 	await openNoteAtCursor(obsidian, notePath, { line: 0, ch: 5 });
 
 	await obsidian.command("spellfix:fix-previous-spelling").run();
@@ -23,27 +22,26 @@ test("skipCodeBlocks off allows correction inside inline code", async ({ obsidia
 });
 
 test("skipCodeBlocks on skips correction inside inline code", async ({ obsidian, sandbox }) => {
-	const notePath = sandbox.path("spellfix-skip-code.md");
-	await sandbox.writeNote({ path: "spellfix-skip-code.md", body: "`teh`" });
+	const notePath = await writeTestNote(sandbox, "`teh`");
 	await openNoteAtCursor(obsidian, notePath, { line: 0, ch: 5 });
 
 	await obsidian.command("spellfix:fix-previous-spelling").run();
-	await sleep(obsidian, 500);
 	await expect(obsidian).toHaveEditorTextContaining("`teh`");
 });
 
 test("toggle autocorrect shows notice and persists setting", async ({ obsidian }) => {
 	const before = await readPluginSettings(obsidian);
+	const wasEnabled = Boolean(before.autocorrect);
 
 	await obsidian.command("spellfix:toggle-autocorrect").run();
-	await sleep(obsidian, 500);
+	await waitForPluginSetting(obsidian, "autocorrect", (value) => value !== wasEnabled);
 
 	const after = await readPluginSettings(obsidian);
-	expect(Boolean(after.autocorrect)).toBe(!Boolean(before.autocorrect));
+	expect(Boolean(after.autocorrect)).toBe(!wasEnabled);
 
 	await obsidian.command("spellfix:toggle-autocorrect").run();
-	await sleep(obsidian, 500);
+	await waitForPluginSetting(obsidian, "autocorrect", (value) => value === wasEnabled);
 
 	const restored = await readPluginSettings(obsidian);
-	expect(Boolean(restored.autocorrect)).toBe(Boolean(before.autocorrect));
+	expect(Boolean(restored.autocorrect)).toBe(wasEnabled);
 });

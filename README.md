@@ -48,6 +48,7 @@ spellchecker API to detect misspellings and get suggestions, then automatically 
 - Works only on the current line (respects line boundaries)
 - If your cursor is in the middle of a word, it checks the complete word
 - All settings and features apply to both manual correction and autocorrect
+- Links, URLs, tags, block references, callout types, and frontmatter are never changed
 
 ## Language support
 

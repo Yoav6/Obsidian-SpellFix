@@ -245,10 +245,11 @@ this.registerInterval(window.setInterval(() => { /* ... */ }, 1000));
 
 ## Testing
 
-- After code changes, always run `npm run check`
+- Before commit, run `npm run check`
 - **During development**, prefer targeted tests over the full suite — see [TESTING.md](TESTING.md#running-a-single-test):
   - Utils / pure logic: `npm run test:unit:file -- tests/unit/<module>.test.ts`
-  - Commands / Obsidian behavior: `npm run test:e2e:file -- tests/e2e/<area>.test.ts` (Obsidian open, `npm run build` first)
+  - Commands / Obsidian behavior: `npm run test:e2e:dev -- tests/e2e/<area>.test.ts` (Obsidian open, `npm run build` first)
+  - Quick typecheck + lint without rebuild: `npm run check:quick`
   - Narrow further with `-t "test name substring"` after `--`
 - For full isolated E2E, run `npm run test:e2e` (disables other community plugins except BRAT, Hot Reload, and SpellFix)
 - Before releases, run `npm run test:release` to include a full-plugin-stack conflict check (Obsidian must be open on Plugin Development Vault)
@@ -266,11 +267,13 @@ this.registerInterval(window.setInterval(() => { /* ... */ }, 1000));
 | `src/utils/suggestion-filter.ts` | Filter, ignore, and prioritize suggestions | `tests/unit/suggestion-filter.test.ts` |
 | `src/utils/code-detection.ts` | Inline code, fenced blocks, LaTeX math | `tests/unit/code-detection.test.ts` |
 | `src/utils/word-extraction.ts` | Unicode word extraction with skip regions | `tests/unit/word-extraction.test.ts` |
+| `src/utils/non-prose.ts` | Links, URLs, tags, and frontmatter that must not be corrected | `tests/unit/non-prose.test.ts` |
+| `src/utils/replacement-state.ts` | Stale-range check for stored replacements | `tests/unit/replacement-state.test.ts` |
 | `src/utils/dictionary.ts` | Dictionary file parsing and Linux paths | `tests/unit/dictionary.test.ts` |
 
 ### ESLint rule overrides
 
-- `main.ts` — `obsidianmd/prefer-active-doc` disabled until `activeDocument` is available in the pinned `obsidian` types
+None currently.
 
 ## References
 
