@@ -95,6 +95,13 @@ test("restore original word ignores a correction made in another note", async ({
 	await expect(obsidian).toHaveEditorTextContaining("the other note");
 });
 
+test("add previous misspelled word to dictionary runs without error", async ({ obsidian, sandbox }) => {
+	const notePath = await writeTestNote(sandbox, "xylphratz quick");
+	await openNoteAtCursor(obsidian, notePath, { line: 0, ch: 9 });
+
+	await obsidian.command("spellfix:add-previous-word-to-dictionary").run();
+});
+
 test("toggle autocorrect flips the setting", async ({ obsidian }) => {
 	const beforeSettings = await readPluginSettings(obsidian);
 	const wasEnabled = Boolean(beforeSettings.autocorrect);

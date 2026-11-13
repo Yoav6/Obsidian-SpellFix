@@ -41,7 +41,7 @@ interface SpellcheckerApi {
 
 let storedSuggestions: StoredSuggestions | null = null;
 
-function getSpellcheckerApi(): SpellcheckerApi | null {
+export function getSpellcheckerApi(): SpellcheckerApi | null {
 	try {
 		const electron = (window as { require?: (id: string) => unknown }).require?.('electron') as
 			| {
@@ -65,7 +65,7 @@ function getSpellcheckerApi(): SpellcheckerApi | null {
 	return null;
 }
 
-function getActiveTarget(plugin: SpellFixPlugin): EditorTarget | null {
+export function getActiveTarget(plugin: SpellFixPlugin): EditorTarget | null {
 	const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
 	if (!activeView || !activeView.editor) {
 		return null;
@@ -73,7 +73,7 @@ function getActiveTarget(plugin: SpellFixPlugin): EditorTarget | null {
 	return { editor: activeView.editor, filePath: activeView.file?.path ?? null };
 }
 
-function isLineExcluded(editor: Editor, line: number, plugin: SpellFixPlugin): boolean {
+export function isLineExcluded(editor: Editor, line: number, plugin: SpellFixPlugin): boolean {
 	const getLine = (i: number) => editor.getLine(i);
 	if (isInsideFrontmatterFromLines(getLine, editor.lineCount(), line)) {
 		return true;
@@ -85,7 +85,7 @@ function isInsideLatexMath(editor: Editor, line: number, charPos: number): boole
 	return isInsideLatexMathFromLines((i) => editor.getLine(i), line, charPos);
 }
 
-function extractWords(text: string, lineNumber: number, editor: Editor, plugin: SpellFixPlugin): Word[] {
+export function extractWords(text: string, lineNumber: number, editor: Editor, plugin: SpellFixPlugin): Word[] {
 	return extractWordsFromLine(
 		text,
 		lineNumber,
