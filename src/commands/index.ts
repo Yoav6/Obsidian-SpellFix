@@ -1,6 +1,7 @@
 import { Notice } from 'obsidian';
 import type SpellFixPlugin from '../../main';
 import { fixPreviousSpelling, cycleSuggestion, cycleSuggestionBack, restoreOriginalWord, addLastSuggestionToIgnored } from './fix-previous-spelling';
+import { addPreviousWordToDictionary } from './add-to-dictionary';
 
 export function registerCommands(plugin: SpellFixPlugin): void {
 	plugin.addCommand({
@@ -33,6 +34,12 @@ export function registerCommands(plugin: SpellFixPlugin): void {
 		callback: () => addLastSuggestionToIgnored(plugin)
 	});
 	
+	plugin.addCommand({
+		id: 'add-previous-word-to-dictionary',
+		name: 'Add previous misspelled word to dictionary',
+		callback: () => addPreviousWordToDictionary(plugin)
+	});
+
 	plugin.addCommand({
 		id: 'toggle-autocorrect',
 		name: 'Toggle autocorrect',

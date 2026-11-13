@@ -10,12 +10,14 @@ Quickly fix spelling mistakes without interrupting your flow. Uses keyboard shor
 - **Cycle suggestion**: After fixing a word, cycle through all available spelling suggestions to find the best match.
 - **Restore original word**: Restore the original misspelled word if you changed your mind.
 - **Add to ignored suggestions**: Add the current suggestion to your ignore list, remove it from the cycle list, and move to the next suggestion (or restore the original if no more suggestions are available).
+- **Add previous misspelled word to dictionary**: Finds the nearest misspelled word before the cursor and adds it to Obsidian's native spellcheck dictionary (the same one right-click > "Add to dictionary" uses), so the red squiggle goes away without using the mouse.
 
 **Note:** For a smooth workflow, these commands should be assigned to hotkeys, but you'll need to assign them on your own in Obsidian's Settings → Hotkeys, or by finding the plugin in Settings → Community plugins and clicking the plus icon. I recommend using 
 - `Alt+F` for *Fix previous spelling*
 - `Alt+C` for *Cycle suggestion*
 - `Alt+R` for *Restore original word*
-- `Alt+X` for *Add to ignored suggestions* 
+- `Alt+X` for *Add to ignored suggestions*
+- `Alt+D` for *Add previous misspelled word to dictionary*
 
 ### Settings
 
@@ -35,6 +37,7 @@ Quickly fix spelling mistakes without interrupting your flow. Uses keyboard shor
 3. Don't like it? Press your "Cycle suggestion" hotkey (e.g., `Alt+C`) to see other suggestions
 4. Still not right? Press your "Restore original word" hotkey (e.g., `Alt+R`) to restore "teh"
 5. Want to prevent this suggestion? Press your "Add to ignored suggestions" hotkey (e.g., `Alt+X`) to add it to your ignore list
+6. Want to keep the word as-is? Press your "Add previous misspelled word to dictionary" hotkey (e.g., `Alt+D`) to add it to your dictionary
 
 With **Autocorrect** enabled, just type "teh" and after pressing space it automatically becomes "the ". Then you can use your cycle, restore, and ignore hotkeys as needed, like in the example above. 
 
